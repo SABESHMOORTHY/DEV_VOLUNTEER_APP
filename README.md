@@ -108,24 +108,26 @@ Predicts task acceptance likelihood using:
 - Node.js 18 or higher
 - Maven 3.6+
 
-### Backend Setup
+### Backend Setup (Python Flask)
 
 1. **Navigate to backend directory:**
    ```bash
-   cd volunteer-assistance-system
+   cd volunai-backend
    ```
 
-2. **Build and run:**
+2. **Install dependencies:**
    ```bash
-   mvn clean install
-   mvn spring-boot:run
+   pip install -r requirements.txt
    ```
 
-3. **Access H2 Console:**
-   - URL: `http://localhost:8080/h2-console`
-   - JDBC URL: `jdbc:h2:mem:volunteer_db`
-   - Username: `sa`
-   - Password: (empty)
+3. **Run the server:**
+   ```bash
+   python app.py
+   ```
+
+4. **Access API Documentation:**
+   - URL: `http://localhost:5000/api/`
+   - Analytics Instance: `http://localhost:5000/api/ai/enhanced/analytics`
 
 ### Frontend Setup
 
@@ -146,7 +148,7 @@ Predicts task acceptance likelihood using:
 
 4. **Access application:**
    - Frontend: `http://localhost:5173`
-   - Backend API: `http://localhost:8080`
+   - Backend API Proxy: `http://localhost:5173/api` (proxied to port 5000)
 
 ## 📱 User Interfaces
 

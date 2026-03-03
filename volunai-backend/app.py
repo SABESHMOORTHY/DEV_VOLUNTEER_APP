@@ -6,7 +6,7 @@ from flask import Flask
 from flask_cors import CORS
 from models import db
 from data_init import init_sample_data
-from routes import volunteers, requests, ai
+from routes import volunteers, requests, ai, assignments, auth, chat, notifications, approvals
 
 
 def create_app():
@@ -21,9 +21,14 @@ def create_app():
     CORS(app)  # allow React dev-server origin
 
     # ── Register API blueprints ──
+    app.register_blueprint(auth.bp)
     app.register_blueprint(volunteers.bp)
     app.register_blueprint(requests.bp)
     app.register_blueprint(ai.bp)
+    app.register_blueprint(assignments.bp)
+    app.register_blueprint(chat.bp)
+    app.register_blueprint(notifications.bp)
+    app.register_blueprint(approvals.bp)
 
     # ── Create tables & seed data on first run ──
     with app.app_context():

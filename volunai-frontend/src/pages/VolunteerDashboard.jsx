@@ -9,8 +9,7 @@ import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
     ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell
 } from 'recharts';
-import { getVolunteerById, getRequests, updateRequestStatus } from '../services/api';
-import { recordOutcome, getAdaptiveSuggestions } from '../services/aiEngine';
+import { getVolunteerById, getVolunteers, getVolunteerRequests, acceptRequest, declineRequest, completeRequestByVolunteer, toggleVolunteerAvailability, getRequests } from '../services/api';
 
 const TABS = [
     { id: 'notifications', label: 'Notifications', icon: Bell },
@@ -27,147 +26,145 @@ export default function VolunteerDashboard() {
     const [expandedTask, setExpandedTask] = useState(null);
     const [profileEditing, setProfileEditing] = useState(false);
 
-    // Simulated volunteer profile (volunteer #1 from seed data)
-    const [volunteer, setVolunteer] = useState({
-        id: 1,
-        name: 'Aisha Patel',
-        email: 'aisha.patel@email.com',
-        phone: '5551001001',
-        location: 'New York',
-        availableDays: ['Monday', 'Wednesday', 'Friday'],
-        serviceType: ['Food Delivery', 'Medical Assistance'],
-        rating: 4.8,
-        active: true,
-        completedTasks: 47,
-        acceptanceRate: 0.85,
-        reliabilityScore: 4.9,
-        avgResponseTime: 42,
-    });
+    const [allVolunteers, setAllVolunteers] = useState([]);
+    const [selectedVolId, setSelectedVolId] = useState(1);
+    const [volunteer, setVolunteer] = useState(null);
+    const [notifications, setNotifications] = useState([]);
+    const [taskHistory, setTaskHistory] = useState([]);
+    const [loading, setLoading] = useState(true);
 
-    // Simulated task notifications (assigned to this volunteer)
-    const [notifications, setNotifications] = useState([
-        {
-            id: 1,
-            serviceType: 'Food Delivery',
-            description: 'Elderly resident needs weekly grocery delivery. Lives alone on 5th floor, limited mobility.',
-            location: 'New York',
-            urgencyLevel: 'HIGH',
-            requesterName: 'Maria Johnson',
-            requesterContact: '5559001001',
-            matchScore: 0.92,
-            acceptanceProbability: 0.88,
-            timestamp: new Date().toISOString(),
-            scoreBreakdown: {
-                availability: { score: 1.0, weighted: 0.25 },
-                proximity: { score: 1.0, weighted: 0.20 },
-                skillMatch: { score: 1.0, weighted: 0.25 },
-                reliability: { score: 0.96, weighted: 0.14 },
-                acceptance: { score: 0.88, weighted: 0.13 },
+    useEffect(() => {
+        const fetchVolunteers = async () => {
+            try {
+                const res = await getVolunteers();
+                if (res.data && res.data.length > 0) {
+                    setAllVolunteers(res.data);
+                    setSelectedVolId(res.data[0].id);
+                } else {
+                    setLoading(false);
+                }
+            } catch (err) {
+                console.error("Failed to fetch volunteers:", err);
+                setLoading(false);
             }
-        },
-        {
-            id: 3,
-            serviceType: 'Medical Assistance',
-            description: 'Patient needs transportation to weekly dialysis appointments on Wednesdays.',
-            location: 'New York',
-            urgencyLevel: 'MEDIUM',
-            requesterName: 'Susan Park',
-            requesterContact: '5559001003',
-            matchScore: 0.78,
-            acceptanceProbability: 0.75,
-            timestamp: new Date(Date.now() - 3600000).toISOString(),
-            scoreBreakdown: {
-                availability: { score: 0.8, weighted: 0.20 },
-                proximity: { score: 0.5, weighted: 0.10 },
-                skillMatch: { score: 1.0, weighted: 0.25 },
-                reliability: { score: 0.96, weighted: 0.14 },
-                acceptance: { score: 0.75, weighted: 0.11 },
-            }
-        },
-    ]);
+        };
+        fetchVolunteers();
+    }, []);
 
-    // Simulated task history
-    const [taskHistory, setTaskHistory] = useState([
-        {
-            id: 101, serviceType: 'Food Delivery', description: 'Weekly grocery delivery for elderly couple',
-            requesterName: 'Carol Williams', location: 'Manhattan', status: 'COMPLETED',
-            completionDate: '2026-02-20', performanceRating: 5, responseTime: 25
-        },
-        {
-            id: 102, serviceType: 'Medical Assistance', description: 'Pharmacy prescription pickup and delivery',
-            requesterName: 'Daniel Davis', location: 'Brooklyn', status: 'COMPLETED',
-            completionDate: '2026-02-15', performanceRating: 5, responseTime: 18
-        },
-        {
-            id: 103, serviceType: 'Food Delivery', description: 'Emergency meal delivery for disabled veteran',
-            requesterName: 'Eva Martinez', location: 'Queens', status: 'COMPLETED',
-            completionDate: '2026-02-10', performanceRating: 4, responseTime: 32
-        },
-        {
-            id: 104, serviceType: 'Medical Assistance', description: 'Hospital appointment transportation',
-            requesterName: 'Frank Lee', location: 'Bronx', status: 'DECLINED',
-            completionDate: '2026-02-08', performanceRating: 0, responseTime: 0
-        },
-        {
-            id: 105, serviceType: 'Food Delivery', description: 'Grocery delivery for single mother',
-            requesterName: 'Grace Kim', location: 'Manhattan', status: 'COMPLETED',
-            completionDate: '2026-02-05', performanceRating: 5, responseTime: 20
-        },
-        {
-            id: 106, serviceType: 'Medical Assistance', description: 'Medication pickup from pharmacy',
-            requesterName: 'Henry Chen', location: 'New York', status: 'COMPLETED',
-            completionDate: '2026-01-28', performanceRating: 4, responseTime: 45
-        },
-    ]);
+    useEffect(() => {
+        const fetchData = async () => {
+            if (!selectedVolId) return;
+            try {
+                const [volRes, requestsRes] = await Promise.all([
+                    getVolunteerById(selectedVolId),
+                    getVolunteerRequests(selectedVolId)
+                ]);
+
+                setVolunteer(volRes.data);
+                
+                const allRequests = requestsRes.data;
+                
+                // Categorize requests
+                const pending = allRequests.filter(r => r.status === 'PENDING' && !r.assigned_volunteer_id);
+                const myAssigned = allRequests.filter(r => r.is_assigned_to_me && r.status === 'ASSIGNED');
+                const completed = allRequests.filter(r => r.status === 'COMPLETED');
+                const otherAssigned = allRequests.filter(r => r.assigned_volunteer_id && !r.is_assigned_to_me && r.status === 'ASSIGNED');
+                
+                setNotifications([...pending, ...myAssigned]);
+                setTaskHistory([...completed, ...otherAssigned]);
+                setLoading(false);
+            } catch (err) {
+                console.error("Failed to fetch volunteer data:", err);
+                setLoading(false);
+            }
+        };
+
+        fetchData();
+        const interval = setInterval(fetchData, 10000); // Poll every 10s for sync
+        return () => clearInterval(interval);
+    }, [selectedVolId]);
+
+    const handleAcceptTask = async (requestId) => {
+        try {
+            await acceptRequest(requestId, selectedVolId);
+            showToast("Task accepted and assigned!", "success");
+            // Refresh data
+            const requestsRes = await getVolunteerRequests(selectedVolId);
+            const allRequests = requestsRes.data;
+            const pending = allRequests.filter(r => r.status === 'PENDING' && !r.assigned_volunteer_id);
+            const myAssigned = allRequests.filter(r => r.is_assigned_to_me && r.status === 'ASSIGNED');
+            const completed = allRequests.filter(r => r.status === 'COMPLETED');
+            const otherAssigned = allRequests.filter(r => r.assigned_volunteer_id && !r.is_assigned_to_me && r.status === 'ASSIGNED');
+            
+            setNotifications([...pending, ...myAssigned]);
+            setTaskHistory([...completed, ...otherAssigned]);
+        } catch (err) {
+            showToast("Failed to accept task", "error");
+        }
+    };
+
+    const handleDeclineTask = async (requestId) => {
+        try {
+            await declineRequest(requestId, selectedVolId);
+            showToast("Task declined", "info");
+            // Refresh data
+            const requestsRes = await getVolunteerRequests(selectedVolId);
+            const allRequests = requestsRes.data;
+            const pending = allRequests.filter(r => r.status === 'PENDING' && !r.assigned_volunteer_id);
+            const myAssigned = allRequests.filter(r => r.is_assigned_to_me && r.status === 'ASSIGNED');
+            
+            setNotifications([...pending, ...myAssigned]);
+        } catch (err) {
+            showToast("Failed to decline task", "error");
+        }
+    };
+
+    const handleCompleteTask = async (requestId) => {
+        try {
+            await completeRequestByVolunteer(requestId, selectedVolId);
+            showToast("Task marked as completed!", "success");
+            // Refresh data
+            const requestsRes = await getVolunteerRequests(selectedVolId);
+            const allRequests = requestsRes.data;
+            const pending = allRequests.filter(r => r.status === 'PENDING' && !r.assigned_volunteer_id);
+            const myAssigned = allRequests.filter(r => r.is_assigned_to_me && r.status === 'ASSIGNED');
+            const completed = allRequests.filter(r => r.status === 'COMPLETED');
+            const otherAssigned = allRequests.filter(r => r.assigned_volunteer_id && !r.is_assigned_to_me && r.status === 'ASSIGNED');
+            
+            setNotifications([...pending, ...myAssigned]);
+            setTaskHistory([...completed, ...otherAssigned]);
+        } catch (err) {
+            showToast("Failed to complete task", "error");
+        }
+    };
+
+    const handleToggleAvailability = async () => {
+        const newStatus = volunteer.availabilityStatus === 'AVAILABLE' ? 'BUSY' : 'AVAILABLE';
+        try {
+            await toggleVolunteerAvailability(selectedVolId, newStatus);
+            setVolunteer({ ...volunteer, availabilityStatus: newStatus });
+            showToast(`Status updated to ${newStatus}`, "success");
+        } catch (err) {
+            showToast("Failed to update status", "error");
+        }
+    };
+
 
     function showToast(msg, type = 'info') {
         setToast({ msg, type });
         setTimeout(() => setToast(null), 4000);
     }
 
-    function handleAcceptTask(taskId) {
-        const task = notifications.find(t => t.id === taskId);
-        if (!task) return;
+    // Old static handlers removed — now using async API handlers above
 
-        setNotifications(prev => prev.filter(t => t.id !== taskId));
-        setTaskHistory(prev => [{
-            id: Date.now(), serviceType: task.serviceType, description: task.description,
-            requesterName: task.requesterName, location: task.location, status: 'ACCEPTED',
-            completionDate: new Date().toISOString().split('T')[0], performanceRating: 0, responseTime: 15
-        }, ...prev]);
-        recordOutcome(volunteer.id, taskId, 'completed');
-        setVolunteer(v => ({ ...v, completedTasks: v.completedTasks + 1 }));
-        showToast(`Accepted "${task.serviceType}" task from ${task.requesterName}!`, 'success');
-    }
-
-    function handleDeclineTask(taskId) {
-        const task = notifications.find(t => t.id === taskId);
-        if (!task) return;
-
-        setNotifications(prev => prev.filter(t => t.id !== taskId));
-        setTaskHistory(prev => [{
-            id: Date.now(), serviceType: task.serviceType, description: task.description,
-            requesterName: task.requesterName, location: task.location, status: 'DECLINED',
-            completionDate: new Date().toISOString().split('T')[0], performanceRating: 0, responseTime: 0
-        }, ...prev]);
-        recordOutcome(volunteer.id, taskId, 'declined');
-        showToast(`Declined "${task.serviceType}" task`, 'info');
-    }
-
-    // Performance data
-    const completedCount = taskHistory.filter(t => t.status === 'COMPLETED').length;
+    // Performance data from API
+    const completedCount = volunteer?.completedTasks || taskHistory.filter(t => t.status === 'COMPLETED').length;
     const declinedCount = taskHistory.filter(t => t.status === 'DECLINED').length;
-    const acceptedCount = taskHistory.filter(t => t.status === 'ACCEPTED').length;
-    const totalTasks = taskHistory.length;
-    const acceptanceRate = totalTasks > 0 ? ((completedCount + acceptedCount) / totalTasks) : 0;
-    const avgRating = completedCount > 0
-        ? (taskHistory.filter(t => t.performanceRating > 0).reduce((a, t) => a + t.performanceRating, 0) /
-            taskHistory.filter(t => t.performanceRating > 0).length)
-        : 0;
-    const avgResponseTime = taskHistory.filter(t => t.responseTime > 0).length > 0
-        ? Math.round(taskHistory.filter(t => t.responseTime > 0).reduce((a, t) => a + t.responseTime, 0) /
-            taskHistory.filter(t => t.responseTime > 0).length)
-        : 0;
+    const acceptedCount = notifications.length;
+    const totalTasks = taskHistory.length + notifications.length;
+    const acceptanceRate = volunteer?.acceptanceRate || (totalTasks > 0 ? ((completedCount + acceptedCount) / totalTasks) : 0);
+    const avgRating = volunteer?.reliabilityScore || volunteer?.rating || 0;
+    const avgResponseTime = 0; // Not tracked in API yet
 
     const monthlyTrend = [
         { month: 'Sep', rating: 4.2, tasks: 6 },
@@ -190,6 +187,45 @@ export default function VolunteerDashboard() {
         { name: 'Declined', value: declinedCount },
     ];
 
+    if (loading) {
+        return (
+            <div className="app-layout">
+                <div className="main-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+                    <div className="glass-card" style={{ textAlign: 'center', padding: 40 }}>
+                        <div style={{ fontSize: 40, marginBottom: 16 }}>🔄</div>
+                        <h3>Loading Volunteer Dashboard...</h3>
+                        <p style={{ color: 'var(--text-muted)', marginTop: 8 }}>Fetching your profile and assignments</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (!volunteer && allVolunteers.length === 0) {
+        return (
+            <div className="app-layout">
+                <div className="main-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '40px 20px' }}>
+                    <div className="glass-card" style={{ textAlign: 'center', padding: 48, maxWidth: 500 }}>
+                        <div style={{ fontSize: 56, marginBottom: 16 }}>👋</div>
+                        <h2 style={{ marginBottom: 8 }}>No Volunteers Found</h2>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: 24, lineHeight: 1.6 }}>
+                            There are no registered volunteers in the system yet.
+                            Please register as a volunteer first to access this dashboard.
+                        </p>
+                        <div className="flex gap-12" style={{ justifyContent: 'center', flexWrap: 'wrap' }}>
+                            <Link to="/register-volunteer" className="btn btn-primary" style={{ textDecoration: 'none' }}>
+                                <User size={16} /> Register as Volunteer
+                            </Link>
+                            <Link to="/" className="btn btn-ghost" style={{ textDecoration: 'none' }}>
+                                <Home size={16} /> Back to Home
+                            </Link>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="app-layout">
             {/* Sidebar */}
@@ -202,6 +238,18 @@ export default function VolunteerDashboard() {
                     </div>
                 </div>
 
+                {/* Volunteer Selector */}
+                <div style={{ padding: '8px 16px' }}>
+                    <select
+                        value={selectedVolId}
+                        onChange={e => setSelectedVolId(Number(e.target.value))}
+                        style={{ width: '100%', padding: '8px 10px', borderRadius: 8, background: 'var(--bg-glass)', color: 'var(--text-primary)', border: '1px solid var(--border-glass)', fontSize: 13 }}>
+                        {allVolunteers.map(v => (
+                            <option key={v.id} value={v.id}>{v.name}</option>
+                        ))}
+                    </select>
+                </div>
+
                 {/* Profile Summary */}
                 <div className="vol-profile-mini">
                     <div className="profile-avatar" style={{ width: 44, height: 44, fontSize: 18 }}>
@@ -212,6 +260,10 @@ export default function VolunteerDashboard() {
                         <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                             <MapPin size={10} style={{ marginRight: 2 }} />{volunteer.location} · ⭐ {volunteer.rating}
                         </div>
+                        <span className={`badge ${volunteer.availabilityStatus === 'AVAILABLE' ? 'badge-completed' : 'badge-medium'}`}
+                            style={{ fontSize: 10, marginTop: 4, display: 'inline-flex' }}>
+                            ● {volunteer.availabilityStatus}
+                        </span>
                     </div>
                 </div>
 
@@ -271,37 +323,36 @@ export default function VolunteerDashboard() {
                             <div className="vol-notifications-list">
                                 {notifications.map((task, idx) => (
                                     <div key={task.id}
-                                        className={`notification-card ${task.urgencyLevel?.toLowerCase()}`}
+                                        className={`notification-card ${task.urgency_level?.toLowerCase()}`}
                                         style={{ animationDelay: `${idx * 0.1}s` }}>
 
                                         <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
                                             <div className="flex items-center gap-12">
                                                 <div className="vol-task-icon">
-                                                    {task.serviceType === 'Food Delivery' ? '🍽️' :
-                                                        task.serviceType === 'Medical Assistance' ? '🏥' :
-                                                            task.serviceType === 'Transportation' ? '🚗' :
-                                                                task.serviceType === 'Elder Care' ? '👴' :
-                                                                    task.serviceType === 'Home Repair' ? '🔧' : '📋'}
+                                                    {task.service_type === 'Food Delivery' ? '🍽️' :
+                                                        task.service_type === 'Medical Assistance' ? '🏥' :
+                                                            task.service_type === 'Transportation' ? '🚗' :
+                                                                task.service_type === 'Elder Care' ? '👴' :
+                                                                    task.service_type === 'Home Repair' ? '🔧' : '📋'}
                                                 </div>
                                                 <div>
                                                     <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 2 }}>
-                                                        {task.serviceType}
+                                                        {task.service_type}
                                                     </div>
                                                     <div className="flex items-center gap-8" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                                                         <span><MapPin size={11} style={{ marginRight: 3 }} />{task.location}</span>
-                                                        <span><User size={11} style={{ marginRight: 3 }} />{task.requesterName}</span>
-                                                        <span><Clock size={11} style={{ marginRight: 3 }} />
-                                                            {new Date(task.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                        </span>
+                                                        <span><User size={11} style={{ marginRight: 3 }} />{task.requester_name}</span>
+                                                        {task.is_assigned_to_me && <span style={{ color: 'var(--accent-green)' }}>✓ Assigned to You</span>}
+                                                        {task.assigned_volunteer && !task.is_assigned_to_me && <span style={{ color: 'var(--accent-amber)' }}>Assigned to {task.assigned_volunteer}</span>}
                                                     </div>
                                                 </div>
                                             </div>
                                             <div style={{ textAlign: 'right' }}>
-                                                <span className={`badge badge-${task.urgencyLevel?.toLowerCase()}`}>
-                                                    {task.urgencyLevel}
+                                                <span className={`badge badge-${task.urgency_level?.toLowerCase()}`}>
+                                                    {task.urgency_level}
                                                 </span>
                                                 <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent-purple-light)', marginTop: 4 }}>
-                                                    {Math.round(task.matchScore * 100)}%
+                                                    {Math.round((task.match_score || 0.8) * 100)}%
                                                 </div>
                                                 <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Match Score</div>
                                             </div>
@@ -311,44 +362,30 @@ export default function VolunteerDashboard() {
                                             {task.description}
                                         </p>
 
-                                        <div className="score-bar-container" style={{ marginBottom: 12 }}>
-                                            <span style={{ fontSize: 12, color: 'var(--text-muted)', minWidth: 80 }}>AI Confidence</span>
-                                            <div className="score-bar">
-                                                <div className="score-bar-fill" style={{ width: `${task.acceptanceProbability * 100}%` }} />
-                                            </div>
-                                            <span className="score-value" style={{ fontSize: 12 }}>
-                                                {Math.round(task.acceptanceProbability * 100)}%
-                                            </span>
-                                        </div>
-
-                                        <button onClick={() => setExpandedTask(expandedTask === task.id ? null : task.id)}
-                                            className="btn btn-ghost btn-sm" style={{ marginBottom: 12, fontSize: 11, width: '100%', justifyContent: 'center' }}>
-                                            {expandedTask === task.id ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                                            AI Score Breakdown
-                                        </button>
-
-                                        {expandedTask === task.id && task.scoreBreakdown && (
-                                            <div className="score-breakdown" style={{ animation: 'fadeInUp 0.2s ease', marginBottom: 14 }}>
-                                                {Object.entries(task.scoreBreakdown).map(([key, val]) => (
-                                                    <div key={key} className="score-factor">
-                                                        <span className="score-factor-label">{key}</span>
-                                                        <span className="score-factor-value">
-                                                            {Math.round(val.score * 100)}% → {val.weighted.toFixed(2)}
-                                                        </span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-
                                         <div className="flex gap-8">
-                                            <button onClick={() => handleAcceptTask(task.id)}
-                                                className="btn btn-success btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
-                                                <CheckCircle2 size={16} /> Accept Task
-                                            </button>
-                                            <button onClick={() => handleDeclineTask(task.id)}
-                                                className="btn btn-ghost btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
-                                                <XCircle size={16} /> Decline
-                                            </button>
+                                            {task.can_accept ? (
+                                                <>
+                                                    <button onClick={() => handleAcceptTask(task.id)}
+                                                        className="btn btn-success btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
+                                                        <CheckCircle2 size={16} /> Accept Task
+                                                    </button>
+                                                    <button onClick={() => handleDeclineTask(task.id)}
+                                                        className="btn btn-ghost btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
+                                                        <XCircle size={16} /> Decline
+                                                    </button>
+                                                </>
+                                            ) : task.can_complete ? (
+                                                <>
+                                                    <button onClick={() => handleCompleteTask(task.id)}
+                                                        className="btn btn-success btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
+                                                        <CheckCircle2 size={16} /> Mark Complete
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', width: '100%' }}>
+                                                    {task.assigned_volunteer ? `Assigned to ${task.assigned_volunteer}` : 'No longer available'}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 ))}
@@ -391,6 +428,13 @@ export default function VolunteerDashboard() {
                                                 style={{ marginTop: 8, display: 'inline-flex' }}>
                                                 {volunteer.active ? '● Active' : '● Inactive'}
                                             </span>
+                                            <div style={{ marginTop: 12 }}>
+                                                <button onClick={handleToggleAvailability}
+                                                    className={`btn btn-sm ${volunteer.availabilityStatus === 'AVAILABLE' ? 'btn-success' : 'btn-ghost'}`}
+                                                    style={{ fontSize: 12 }}>
+                                                    {volunteer.availabilityStatus === 'AVAILABLE' ? '✅ Available' : '⏸ Set Available'}
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -492,47 +536,40 @@ export default function VolunteerDashboard() {
                                 <thead>
                                     <tr>
                                         <th>Service</th>
-                                        <th>Description</th>
                                         <th>Requester</th>
                                         <th>Location</th>
-                                        <th>Date</th>
                                         <th>Status</th>
-                                        <th>Rating</th>
-                                        <th>Response</th>
+                                        <th>Assigned To</th>
+                                        <th>Match Score</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {taskHistory.map(task => (
                                         <tr key={task.id}>
                                             <td>
-                                                <div style={{ fontWeight: 600, fontSize: 13 }}>{task.serviceType}</div>
+                                                <div style={{ fontWeight: 600, fontSize: 13 }}>{task.service_type || '—'}</div>
                                             </td>
-                                            <td>
-                                                <div style={{ fontSize: 13, color: 'var(--text-secondary)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                    {task.description}
-                                                </div>
-                                            </td>
-                                            <td>{task.requesterName}</td>
-                                            <td><MapPin size={11} style={{ marginRight: 3 }} />{task.location}</td>
-                                            <td style={{ fontSize: 13 }}>{task.completionDate}</td>
+                                            <td>{task.requester_name || '—'}</td>
+                                            <td><MapPin size={11} style={{ marginRight: 3 }} />{task.location || '—'}</td>
                                             <td>
                                                 <span className={`badge badge-${task.status?.toLowerCase()}`}>
                                                     {task.status}
                                                 </span>
                                             </td>
                                             <td>
-                                                {task.performanceRating > 0 ? (
-                                                    <div className="flex items-center gap-4">
-                                                        <Star size={13} style={{ color: 'var(--accent-amber)', fill: 'var(--accent-amber)' }} />
-                                                        <span style={{ fontWeight: 600 }}>{task.performanceRating}</span>
-                                                    </div>
+                                                {task.assigned_volunteer ? (
+                                                    <span style={{ color: task.is_assigned_to_me ? 'var(--accent-green)' : 'var(--text-secondary)' }}>
+                                                        {task.is_assigned_to_me ? 'You' : task.assigned_volunteer}
+                                                    </span>
                                                 ) : (
                                                     <span className="text-muted" style={{ fontSize: 12 }}>—</span>
                                                 )}
                                             </td>
                                             <td>
-                                                {task.responseTime > 0 ? (
-                                                    <span style={{ fontSize: 13 }}>{task.responseTime}m</span>
+                                                {task.match_score > 0 ? (
+                                                    <span style={{ fontWeight: 600, color: 'var(--accent-purple-light)' }}>
+                                                        {Math.round(task.match_score * 100)}%
+                                                    </span>
                                                 ) : (
                                                     <span className="text-muted" style={{ fontSize: 12 }}>—</span>
                                                 )}

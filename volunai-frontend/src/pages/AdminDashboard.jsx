@@ -4,7 +4,7 @@ import {
     LayoutDashboard, PlusCircle, Users, ClipboardList, BarChart3,
     Brain, Target, Zap, CheckCircle2, XCircle, Clock, MapPin,
     AlertTriangle, ArrowRight, ChevronDown, ChevronUp, Home,
-    Sparkles, TrendingUp, Activity, Send
+    Sparkles, TrendingUp, Activity, Send, MessageSquare, ExternalLink
 } from 'lucide-react';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -22,6 +22,7 @@ import {
 const TABS = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'create', label: 'Create Request', icon: PlusCircle },
+    { id: 'chatbox', label: 'Chat Requests', icon: MessageSquare },
     { id: 'requests', label: 'All Requests', icon: ClipboardList },
     { id: 'volunteers', label: 'Volunteers', icon: Users },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
@@ -285,15 +286,15 @@ export default function AdminDashboard() {
                             <div className="glass-card">
                                 <div className="card-title"><PlusCircle size={18} /> Request Form</div>
                                 <form onSubmit={handleCreateRequest}>
-                                    <div className="grid-2">
+                                    <div className="grid-2" style={{ gap: 20 }}>
                                         <div className="form-group">
-                                            <label>Requester Name *</label>
+                                            <label>Requester Name</label>
                                             <input className="form-input" value={form.requesterName}
                                                 onChange={e => setForm(f => ({ ...f, requesterName: e.target.value }))}
                                                 placeholder="Jane Smith" required />
                                         </div>
                                         <div className="form-group">
-                                            <label>Contact *</label>
+                                            <label>Contact</label>
                                             <input className="form-input" value={form.requesterContact}
                                                 onChange={e => setForm(f => ({ ...f, requesterContact: e.target.value }))}
                                                 placeholder="555-1234" required />
@@ -301,7 +302,7 @@ export default function AdminDashboard() {
                                     </div>
 
                                     <div className="form-group">
-                                        <label>Description *</label>
+                                        <label>Description</label>
                                         <textarea className="form-textarea" value={form.description}
                                             onChange={handleDescriptionChange}
                                             placeholder="Describe the service needed... (AI will analyze this text)"
@@ -328,9 +329,9 @@ export default function AdminDashboard() {
                                         </div>
                                     )}
 
-                                    <div className="grid-2" style={{ marginTop: 16 }}>
+                                    <div className="grid-2" style={{ gap: 20 }}>
                                         <div className="form-group">
-                                            <label>Location *</label>
+                                            <label>Location</label>
                                             <select className="form-select" value={form.location}
                                                 onChange={e => setForm(f => ({ ...f, location: e.target.value }))} required>
                                                 <option value="">Select location</option>
@@ -339,7 +340,7 @@ export default function AdminDashboard() {
                                             </select>
                                         </div>
                                         <div className="form-group">
-                                            <label>Service Type *</label>
+                                            <label>Service Type</label>
                                             <select className="form-select" value={form.serviceType}
                                                 onChange={e => setForm(f => ({ ...f, serviceType: e.target.value }))} required>
                                                 <option value="">Select type</option>
@@ -351,7 +352,7 @@ export default function AdminDashboard() {
                                     </div>
 
                                     <div className="form-group">
-                                        <label>Urgency *</label>
+                                        <label>Urgency Level</label>
                                         <select className="form-select" value={form.urgencyLevel}
                                             onChange={e => setForm(f => ({ ...f, urgencyLevel: e.target.value }))} required>
                                             <option value="LOW">Low</option>
@@ -452,6 +453,83 @@ export default function AdminDashboard() {
                     </>
                 )}
 
+                {/* ── Chat Requests Tab ── */}
+                {activeTab === 'chatbox' && (
+                    <>
+                        <div className="page-header">
+                            <h2>💬 Chat Requests Inbox</h2>
+                            <p>Service requests submitted through the AI Chat interface — ready to match</p>
+                        </div>
+
+                        {/* Link to public chat */}
+                        <div className="glass-card" style={{ marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <div style={{ width: 40, height: 40, borderRadius: 12, background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <MessageSquare size={20} color="#fff" />
+                                </div>
+                                <div>
+                                    <div style={{ fontWeight: 700, fontSize: 15 }}>Public Chat Request Page</div>
+                                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Share this link with people who need assistance</div>
+                                </div>
+                            </div>
+                            <a href="/chat" target="_blank" rel="noreferrer"
+                                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 18px', background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', borderRadius: 10, color: '#fff', textDecoration: 'none', fontWeight: 600, fontSize: 14 }}>
+                                <ExternalLink size={15} /> Open Chat Page
+                            </a>
+                        </div>
+
+                        {/* Pending requests table */}
+                        <div className="glass-card">
+                            <div className="card-title"><ClipboardList size={18} /> Incoming Requests ({requests.filter(r => r.status === 'PENDING').length} pending)</div>
+                            {requests.filter(r => r.status === 'PENDING').length === 0 ? (
+                                <div className="empty-state">
+                                    <div className="empty-icon">📭</div>
+                                    <p>No pending chat requests yet. Share the chat link to receive requests.</p>
+                                </div>
+                            ) : (
+                                <table className="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th><th>Requester</th><th>Service</th><th>Location</th>
+                                            <th>Urgency</th><th>Description</th><th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {requests.filter(r => r.status === 'PENDING').map(r => (
+                                            <tr key={r.id}>
+                                                <td>#{r.id}</td>
+                                                <td>
+                                                    <strong>{r.requesterName}</strong><br />
+                                                    <span className="text-sm text-muted">{r.requesterContact}</span>
+                                                </td>
+                                                <td>{r.serviceType}</td>
+                                                <td><MapPin size={12} style={{ marginRight: 4 }} />{r.location}</td>
+                                                <td><span className={`badge badge-${r.urgencyLevel?.toLowerCase()}`}>{r.urgencyLevel}</span></td>
+                                                <td style={{ maxWidth: 220 }}>
+                                                    <span style={{ fontSize: 12, color: 'var(--text-secondary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                                        {r.description || '—'}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <button onClick={() => {
+                                                        const ranked = rankVolunteers(volunteers, r);
+                                                        setAiRanking(ranked);
+                                                        setCreatedRequest(r);
+                                                        setShowRanking(true);
+                                                        setActiveTab('create');
+                                                    }} className="btn btn-primary btn-sm">
+                                                        <Brain size={12} /> Match AI
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                    </>
+                )}
+
                 {/* ── All Requests Tab ── */}
                 {activeTab === 'requests' && (
                     <>
@@ -465,21 +543,24 @@ export default function AdminDashboard() {
                                 <thead>
                                     <tr>
                                         <th>ID</th><th>Requester</th><th>Service</th><th>Location</th>
-                                        <th>Urgency</th><th>Status</th><th>Volunteer</th><th>Actions</th>
+                                        <th>Urgency</th><th>Status</th><th>Assigned To</th><th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {requests.map(r => (
                                         <tr key={r.id}>
                                             <td>#{r.id}</td>
-                                            <td><strong>{r.requesterName}</strong><br /><span className="text-sm text-muted">{r.requesterContact}</span></td>
-                                            <td>{r.serviceType}</td>
+                                            <td>
+                                                <strong>{r.requester_name}</strong><br />
+                                                <span className="text-sm text-muted">{r.requester_contact}</span>
+                                            </td>
+                                            <td>{r.service_type}</td>
                                             <td>{r.location}</td>
-                                            <td><span className={`badge badge-${r.urgencyLevel?.toLowerCase()}`}>{r.urgencyLevel}</span></td>
+                                            <td><span className={`badge badge-${r.urgency_level?.toLowerCase()}`}>{r.urgency_level}</span></td>
                                             <td><span className={`badge badge-${r.status?.toLowerCase()}`}>{r.status}</span></td>
                                             <td>
-                                                {r.assignedVolunteerId
-                                                    ? <span className="text-sm">{volunteers.find(v => v.id === r.assignedVolunteerId)?.name || `#${r.assignedVolunteerId}`}</span>
+                                                {r.assigned_volunteer_name
+                                                    ? <span className="text-sm">{r.assigned_volunteer_name}</span>
                                                     : <span className="text-muted text-sm">—</span>}
                                             </td>
                                             <td>
@@ -683,7 +764,10 @@ function Sidebar({ activeTab, setActiveTab }) {
                 ))}
             </div>
 
-            <div style={{ marginTop: 'auto', padding: '16px 0', borderTop: '1px solid var(--border-glass)' }}>
+            <div style={{ marginTop: 'auto', padding: '16px 0', borderTop: '1px solid var(--border-glass)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <a href="/chat" target="_blank" rel="noreferrer" className="sidebar-link" style={{ color: 'var(--accent-purple-light)' }}>
+                    <MessageSquare size={18} className="link-icon" /> Open Chat Page
+                </a>
                 <Link to="/" className="sidebar-link">
                     <Home size={18} className="link-icon" /> Back to Home
                 </Link>

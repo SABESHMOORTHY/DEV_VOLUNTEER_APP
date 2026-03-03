@@ -2,13 +2,24 @@
 Seed data — identical to the Java DataInitializationService so the
 frontend demo experience is exactly the same.
 """
-from models import db, Volunteer, AssistanceRequest
+from models import db, Volunteer, AssistanceRequest, User
 
 
 def init_sample_data():
     """Populate the database with sample volunteers and requests if empty."""
     if Volunteer.query.count() > 0:
         return
+    
+    # Create sample users
+    admin = User(name="Admin User", email="admin@volunai.com", contact_number="555-0001", location="New York", role="admin")
+    admin.set_password("admin123")
+    db.session.add(admin)
+    
+    user1 = User(name="John Doe", email="user@volunai.com", contact_number="555-0002", location="Brooklyn", role="user")
+    user1.set_password("user123")
+    db.session.add(user1)
+    
+    db.session.commit()
 
     volunteers = [
         _vol("Dr. Sarah Johnson", "sarah.johnson@email.com", "555-0101",

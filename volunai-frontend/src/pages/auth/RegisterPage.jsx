@@ -1,7 +1,11 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Eye, EyeOff, UserPlus, Brain, User, Shield, Heart } from 'lucide-react';
+import { Eye, EyeOff, UserPlus, Brain, User, Shield, Heart, Mail, Lock, Phone, MapPin, Zap, CheckCircle2 } from 'lucide-react';
+import Button from '../../components/common/Button';
+import Card from '../../components/common/Card';
+import Input from '../../components/common/Input';
+import Badge from '../../components/common/Badge';
 
 const SKILLS = [
     'Food Delivery', 'Medical Assistance', 'Transportation', 'Elder Care',
@@ -12,15 +16,15 @@ const SKILLS = [
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 const ROLES = [
-    { id: 'user', label: 'User', icon: User, desc: 'I need help / request services', color: 'emerald' },
-    { id: 'volunteer', label: 'Volunteer', icon: Heart, desc: 'I want to help others', color: 'cyan' },
+    { id: 'user', label: 'Community Member', icon: User, desc: 'I need help or request services', color: 'emerald' },
+    { id: 'volunteer', label: 'Volunteer', icon: Heart, desc: 'I want to offer my skills to help', color: 'indigo' },
 ];
 
 export default function RegisterPage() {
     const navigate = useNavigate();
     const { register } = useAuth();
 
-    const [step, setStep] = useState(1); // 1 = role, 2 = details, 3 = extras (volunteer only)
+    const [step, setStep] = useState(1);
     const [role, setRole] = useState('user');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -32,11 +36,6 @@ export default function RegisterPage() {
         name: '', email: '', password: '', confirmPassword: '',
         contactNumber: '', location: ''
     });
-
-    const colorMap = {
-        emerald: 'from-emerald-500 to-teal-500',
-        cyan: 'from-cyan-500 to-blue-500',
-    };
 
     const toggleSkill = (s) => setSkills(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
     const toggleDay = (d) => setDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
@@ -69,7 +68,7 @@ export default function RegisterPage() {
                 availableDays: role === 'volunteer' ? days : [],
             });
             if (user.role === 'volunteer') navigate('/volunteer');
-            else navigate('/dashboard');
+            else navigate('/user'); // Updated to /user as per project structure
         } catch (err) {
             setError(err.response?.data?.error || 'Registration failed. Please try again.');
             setStep(2);
@@ -79,148 +78,182 @@ export default function RegisterPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-950 to-slate-900 flex items-center justify-center p-4">
-            {/* Background glow */}
-            <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-600/20 rounded-full blur-3xl" />
-                <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-emerald-600/20 rounded-full blur-3xl" />
-            </div>
-
-            <div className="relative w-full max-w-lg">
-                {/* Logo */}
-                <div className="text-center mb-6">
-                    <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-blue-500 mb-3 shadow-lg shadow-purple-500/30">
-                        <Brain className="w-7 h-7 text-white" />
+        <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 relative overflow-hidden">
+            {/* Ambient Background */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-indigo-600/10 blur-[120px] rounded-full pointer-events-none" />
+            
+            <div className="relative w-full max-w-2xl">
+                {/* Header */}
+                <div className="text-center mb-8">
+                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-600/10 text-indigo-400 mb-4 border border-indigo-500/20">
+                        <UserPlus size={32} />
                     </div>
-                    <h1 className="text-2xl font-bold text-white">Create Account</h1>
-                    <p className="text-slate-400 mt-1 text-sm">Join CVAS — Step {step} of {role === 'volunteer' ? 3 : 2}</p>
+                    <h1 className="text-3xl font-black text-white tracking-tight italic">Join VolunAI</h1>
+                    <p className="text-slate-400 font-medium mt-1">Step {step} of {role === 'volunteer' ? 3 : 2}: {
+                        step === 1 ? 'Select Your Role' : step === 2 ? 'Account Details' : 'Volunteer Profile'
+                    }</p>
                 </div>
 
-                {/* Progress bar */}
-                <div className="flex gap-1 mb-6">
+                {/* Progress */}
+                <div className="flex gap-2 mb-8 px-4">
                     {[1, 2, ...(role === 'volunteer' ? [3] : [])].map(s => (
-                        <div key={s} className={`flex-1 h-1 rounded-full transition-all duration-300 ${s <= step ? 'bg-gradient-to-r from-purple-500 to-blue-500' : 'bg-slate-700'}`} />
+                        <div key={s} className={`flex-1 h-1.5 rounded-full transition-all duration-500 ${s <= step ? 'bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]' : 'bg-slate-800'}`} />
                     ))}
                 </div>
 
-                <div className="bg-slate-800/60 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-8 shadow-2xl">
-
-                    {/* STEP 1: Choose Role */}
+                <Card padding="loose" className="border-white/5">
+                    {/* STEP 1: ROLE */}
                     {step === 1 && (
-                        <div>
-                            <h2 className="text-lg font-bold text-white mb-2">Who are you?</h2>
-                            <p className="text-slate-400 text-sm mb-6">Choose your role in the CVAS system</p>
-                            <div className="space-y-3">
+                        <div className="animate-fadeIn">
+                            <h2 className="text-xl font-bold text-white mb-6">How would you like to participate?</h2>
+                            <div className="grid grid-cols-1 gap-4">
                                 {ROLES.map(r => (
-                                    <button key={r.id} onClick={() => setRole(r.id)}
-                                        className={`w-full p-4 rounded-xl border-2 text-left flex items-center gap-4 transition-all ${role === r.id
-                                            ? 'border-purple-500 bg-purple-500/10'
-                                            : 'border-slate-600/50 bg-slate-700/30 hover:border-slate-500'}`}>
-                                        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${colorMap[r.color]} flex items-center justify-center flex-shrink-0`}>
-                                            <r.icon className="w-6 h-6 text-white" />
+                                    <button 
+                                        key={r.id} 
+                                        onClick={() => setRole(r.id)}
+                                        className={`
+                                            group w-full p-6 h-32 rounded-2xl border-2 text-left flex items-center gap-6 transition-all duration-300
+                                            ${role === r.id 
+                                                ? 'border-indigo-500 bg-indigo-500/10 shadow-lg shadow-indigo-500/5' 
+                                                : 'border-slate-800 bg-slate-900/40 hover:border-slate-700 hover:bg-slate-900/60'}
+                                        `}
+                                    >
+                                        <div className={`
+                                            w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 transition-transform duration-300 group-hover:scale-110
+                                            ${role === r.id ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30' : 'bg-slate-800 text-slate-400'}
+                                        `}>
+                                            <r.icon size={24} />
                                         </div>
-                                        <div>
-                                            <div className="font-bold text-white">{r.label}</div>
-                                            <div className="text-slate-400 text-sm">{r.desc}</div>
+                                        <div className="flex-1">
+                                            <div className={`font-bold text-lg mb-0.5 ${role === r.id ? 'text-white' : 'text-slate-300'}`}>{r.label}</div>
+                                            <div className="text-slate-500 text-sm font-medium">{r.desc}</div>
                                         </div>
-                                        {role === r.id && <div className="ml-auto text-purple-400 text-lg">✓</div>}
+                                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${role === r.id ? 'border-indigo-500 bg-indigo-500' : 'border-slate-700'}`}>
+                                            {role === r.id && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                                        </div>
                                     </button>
                                 ))}
                             </div>
                         </div>
                     )}
 
-                    {/* STEP 2: Personal Details */}
+                    {/* STEP 2: DETAILS */}
                     {step === 2 && (
-                        <div className="space-y-4">
-                            <h2 className="text-lg font-bold text-white mb-1">Personal Details</h2>
-                            <p className="text-slate-400 text-sm mb-4">Fill in your information</p>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="col-span-2">
-                                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Full Name *</label>
-                                    <input type="text" value={form.name}
-                                        onChange={e => setForm({ ...form, name: e.target.value })}
-                                        placeholder="Your full name"
-                                        className="w-full px-4 py-3 rounded-xl bg-slate-700/50 border border-slate-600/50 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all" />
+                        <div className="animate-fadeIn space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <Input
+                                    label="Full Name"
+                                    id="name"
+                                    placeholder="Jane Doe"
+                                    icon={User}
+                                    value={form.name}
+                                    onChange={e => setForm({...form, name: e.target.value})}
+                                    required
+                                    className="md:col-span-2"
+                                />
+                                <Input
+                                    label="Email Address"
+                                    type="email"
+                                    id="email"
+                                    placeholder="jane@example.com"
+                                    icon={Mail}
+                                    value={form.email}
+                                    onChange={e => setForm({...form, email: e.target.value})}
+                                    required
+                                    className="md:col-span-2"
+                                />
+                                <div className="relative">
+                                    <Input
+                                        label="Password"
+                                        type={showPassword ? 'text' : 'password'}
+                                        id="password"
+                                        placeholder="Min. 6 chars"
+                                        icon={Lock}
+                                        value={form.password}
+                                        onChange={e => setForm({...form, password: e.target.value})}
+                                        required
+                                    />
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="absolute right-4 top-[38px] text-slate-500"
+                                    >
+                                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                    </button>
                                 </div>
-                                <div className="col-span-2">
-                                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Email Address *</label>
-                                    <input type="email" value={form.email}
-                                        onChange={e => setForm({ ...form, email: e.target.value })}
-                                        placeholder="you@example.com"
-                                        className="w-full px-4 py-3 rounded-xl bg-slate-700/50 border border-slate-600/50 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Password *</label>
-                                    <div className="relative">
-                                        <input type={showPassword ? 'text' : 'password'} value={form.password}
-                                            onChange={e => setForm({ ...form, password: e.target.value })}
-                                            placeholder="Min. 6 characters"
-                                            className="w-full px-4 py-3 rounded-xl bg-slate-700/50 border border-slate-600/50 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all pr-10" />
-                                        <button type="button" onClick={() => setShowPassword(!showPassword)}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
-                                            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                                        </button>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Confirm Password *</label>
-                                    <input type="password" value={form.confirmPassword}
-                                        onChange={e => setForm({ ...form, confirmPassword: e.target.value })}
-                                        placeholder="Repeat password"
-                                        className="w-full px-4 py-3 rounded-xl bg-slate-700/50 border border-slate-600/50 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Phone</label>
-                                    <input type="tel" value={form.contactNumber}
-                                        onChange={e => setForm({ ...form, contactNumber: e.target.value })}
-                                        placeholder="555-123-4567"
-                                        className="w-full px-4 py-3 rounded-xl bg-slate-700/50 border border-slate-600/50 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">City / Location</label>
-                                    <input type="text" value={form.location}
-                                        onChange={e => setForm({ ...form, location: e.target.value })}
-                                        placeholder="e.g. New York"
-                                        className="w-full px-4 py-3 rounded-xl bg-slate-700/50 border border-slate-600/50 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all" />
-                                </div>
+                                <Input
+                                    label="Confirm Password"
+                                    type="password"
+                                    id="confirmPassword"
+                                    placeholder="Repeat password"
+                                    icon={Lock}
+                                    value={form.confirmPassword}
+                                    onChange={e => setForm({...form, confirmPassword: e.target.value})}
+                                    required
+                                />
+                                <Input
+                                    label="Phone Number"
+                                    id="phone"
+                                    placeholder="+1 234 567 890"
+                                    icon={Phone}
+                                    value={form.contactNumber}
+                                    onChange={e => setForm({...form, contactNumber: e.target.value})}
+                                />
+                                <Input
+                                    label="Location / City"
+                                    id="location"
+                                    placeholder="e.g. San Francisco"
+                                    icon={MapPin}
+                                    value={form.location}
+                                    onChange={e => setForm({...form, location: e.target.value})}
+                                />
                             </div>
                         </div>
                     )}
 
-                    {/* STEP 3: Volunteer Extras */}
+                    {/* STEP 3: VOLUNTEER EXTRAS */}
                     {step === 3 && (
-                        <div>
-                            <h2 className="text-lg font-bold text-white mb-1">Volunteer Details</h2>
-                            <p className="text-slate-400 text-sm mb-5">Tell us about your skills and availability</p>
-
-                            <div className="mb-5">
-                                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-                                    Skills & Services <span className="normal-case font-normal">(select all that apply)</span>
+                        <div className="animate-fadeIn space-y-8">
+                            <div>
+                                <label className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4 block px-1">
+                                    Your Skills & Services
                                 </label>
-                                <div className="flex flex-wrap gap-2">
+                                <div className="flex flex-wrap gap-2.5">
                                     {SKILLS.map(s => (
-                                        <button key={s} type="button" onClick={() => toggleSkill(s)}
-                                            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${skills.includes(s)
-                                                ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-300'
-                                                : 'bg-slate-700/50 border-slate-600/50 text-slate-400 hover:border-slate-500'}`}>
+                                        <button
+                                            key={s}
+                                            type="button"
+                                            onClick={() => toggleSkill(s)}
+                                            className={`
+                                                px-4 py-2 rounded-xl text-xs font-bold transition-all border
+                                                ${skills.includes(s) 
+                                                    ? 'bg-indigo-500/20 border-indigo-500 text-indigo-300 shadow-lg shadow-indigo-500/10' 
+                                                    : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-600'}
+                                            `}
+                                        >
                                             {s}
                                         </button>
                                     ))}
                                 </div>
                             </div>
-
+                            
                             <div>
-                                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-                                    Available Days <span className="normal-case font-normal">(select all that apply)</span>
+                                <label className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4 block px-1">
+                                    Regular Availability
                                 </label>
-                                <div className="flex flex-wrap gap-2">
+                                <div className="flex flex-wrap gap-2.5">
                                     {DAYS.map(d => (
-                                        <button key={d} type="button" onClick={() => toggleDay(d)}
-                                            className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${days.includes(d)
-                                                ? 'bg-purple-500/20 border-purple-500/50 text-purple-300'
-                                                : 'bg-slate-700/50 border-slate-600/50 text-slate-400 hover:border-slate-500'}`}>
+                                        <button
+                                            key={d}
+                                            type="button"
+                                            onClick={() => toggleDay(d)}
+                                            className={`
+                                                px-4 py-2 rounded-xl text-xs font-bold transition-all border
+                                                ${days.includes(d) 
+                                                    ? 'bg-violet-500/20 border-violet-500 text-violet-300 shadow-lg shadow-violet-500/10' 
+                                                    : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-600'}
+                                            `}
+                                        >
                                             {d.slice(0, 3)}
                                         </button>
                                     ))}
@@ -229,36 +262,40 @@ export default function RegisterPage() {
                         </div>
                     )}
 
-                    {/* Error */}
                     {error && (
-                        <div className="mt-4 flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-xl p-3">
-                            <span className="text-red-400 text-sm">⚠️ {error}</span>
+                        <div className="mt-8 bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 flex items-center gap-3 text-rose-400 text-sm font-semibold animate-shake">
+                            <span>⚠️</span>
+                            {error}
                         </div>
                     )}
 
-                    {/* Navigation buttons */}
-                    <div className="flex gap-3 mt-6">
+                    {/* Progress Actions */}
+                    <div className="flex gap-4 mt-10">
                         {step > 1 && (
-                            <button onClick={() => setStep(s => s - 1)}
-                                className="flex-1 py-3 rounded-xl border border-slate-600 text-slate-300 font-semibold text-sm hover:border-slate-500 hover:text-white transition-all">
-                                ← Back
-                            </button>
+                            <Button variant="secondary" className="flex-1 py-4" onClick={() => setStep(s => s - 1)}>
+                                Back
+                            </Button>
                         )}
-                        <button onClick={handleNext} disabled={loading}
-                            className="flex-1 py-3 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold text-sm flex items-center justify-center gap-2 hover:from-purple-600 hover:to-blue-600 disabled:opacity-50 transition-all shadow-lg shadow-purple-500/25">
-                            {loading ? <span className="animate-spin">⏳</span> : (
-                                step < (role === 'volunteer' ? 3 : 2) ? 'Continue →' : <><UserPlus size={16} /> Create Account</>
-                            )}
-                        </button>
+                        <Button 
+                            className="flex-1 py-4" 
+                            variant="primary" 
+                            onClick={handleNext}
+                            loading={loading}
+                            icon={step < (role === 'volunteer' ? 3 : 2) ? null : UserPlus}
+                        >
+                            {step < (role === 'volunteer' ? 3 : 2) ? 'Continue' : 'Complete Registration'}
+                        </Button>
                     </div>
 
-                    <p className="text-center text-slate-400 text-sm mt-4">
-                        Already have an account?{' '}
-                        <Link to="/login" className="text-purple-400 hover:text-purple-300 font-semibold transition-colors">
-                            Sign in
-                        </Link>
-                    </p>
-                </div>
+                    <div className="mt-8 text-center pt-8 border-t border-white/5">
+                        <p className="text-slate-500 font-medium">
+                            Already have an account?{' '}
+                            <Link to="/login" className="text-white hover:text-indigo-400 font-bold transition-colors">
+                                Sign In
+                            </Link>
+                        </p>
+                    </div>
+                </Card>
             </div>
         </div>
     );

@@ -5,6 +5,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
+import PasswordResetPage from './pages/auth/PasswordResetPage';
 import AdminDashboard from './pages/AdminDashboard';
 import VolunteerDashboard from './pages/VolunteerDashboard';
 import UserDashboard from './pages/UserDashboard';
@@ -20,6 +21,7 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<PasswordResetPage />} />
           <Route path="/chat" element={<ChatRequest />} />
           <Route path="/register-volunteer" element={<RegisterVolunteer />} />
 

@@ -31,7 +31,7 @@ export default function Register() {
           <div style={{ textAlign: 'center', marginBottom: 32 }}>
             <div style={{ width: 64, height: 64, margin: '0 auto 16px', background: 'var(--gradient-primary)', borderRadius: 'var(--radius-lg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28 }}>🤖</div>
             <h2 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>Create Account</h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Join VolunAI community</p>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Join CVAS community</p>
           </div>
 
           {error && (
@@ -46,7 +46,7 @@ export default function Register() {
               <input
                 type="text"
                 value={formData.name}
-                onChange={(e) => setFormData({...formData, name: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className="form-input"
                 placeholder="Enter your full name"
                 required
@@ -58,7 +58,7 @@ export default function Register() {
               <input
                 type="email"
                 value={formData.email}
-                onChange={(e) => setFormData({...formData, email: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 className="form-input"
                 placeholder="your.email@example.com"
                 required
@@ -70,7 +70,7 @@ export default function Register() {
               <input
                 type="password"
                 value={formData.password}
-                onChange={(e) => setFormData({...formData, password: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 className="form-input"
                 placeholder="Create a strong password"
                 required
@@ -82,7 +82,7 @@ export default function Register() {
               <input
                 type="tel"
                 value={formData.contactNumber}
-                onChange={(e) => setFormData({...formData, contactNumber: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, contactNumber: e.target.value })}
                 className="form-input"
                 placeholder="555-123-4567"
               />
@@ -93,7 +93,7 @@ export default function Register() {
               <input
                 type="text"
                 value={formData.location}
-                onChange={(e) => setFormData({...formData, location: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                 className="form-input"
                 placeholder="City, State"
               />
@@ -103,7 +103,7 @@ export default function Register() {
               <label>Account Role</label>
               <select
                 value={formData.role}
-                onChange={(e) => setFormData({...formData, role: e.target.value})}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                 className="form-select"
               >
                 <option value="user">User (Request Services)</option>
@@ -122,8 +122,8 @@ export default function Register() {
 
           <p style={{ textAlign: 'center', marginTop: 24, fontSize: 13, color: 'var(--text-secondary)' }}>
             Already have an account?{' '}
-            <button 
-              onClick={() => navigate('/login')} 
+            <button
+              onClick={() => navigate('/login')}
               style={{ background: 'none', border: 'none', color: 'var(--accent-purple-light)', cursor: 'pointer', fontWeight: 600, textDecoration: 'underline' }}
             >
               Sign In

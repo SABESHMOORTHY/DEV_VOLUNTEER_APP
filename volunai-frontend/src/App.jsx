@@ -1,27 +1,47 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+
 import LandingPage from './pages/LandingPage';
+import LoginPage from './pages/auth/LoginPage';
+import RegisterPage from './pages/auth/RegisterPage';
 import AdminDashboard from './pages/AdminDashboard';
 import VolunteerDashboard from './pages/VolunteerDashboard';
+import UserDashboard from './pages/UserDashboard';
 import ChatRequest from './pages/ChatRequest';
 import RegisterVolunteer from './pages/RegisterVolunteer';
-import Login from './pages/Login';
-import Register from './pages/Register2';
-import UserDashboard from './pages/UserDashboard';
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/user" element={<UserDashboard />} />
-        <Route path="/admin/*" element={<AdminDashboard />} />
-        <Route path="/volunteer/*" element={<VolunteerDashboard />} />
-        <Route path="/chat" element={<ChatRequest />} />
-        <Route path="/register-volunteer" element={<RegisterVolunteer />} />
-      </Routes>
-    </Router>
+    <AuthProvider>
+      <Router>
+        <Routes>
+          {/* Public routes */}
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/chat" element={<ChatRequest />} />
+          <Route path="/register-volunteer" element={<RegisterVolunteer />} />
+
+          {/* Protected routes */}
+          <Route path="/admin/*" element={
+            <ProtectedRoute role="admin">
+              <AdminDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/volunteer/*" element={
+            <ProtectedRoute role="volunteer">
+              <VolunteerDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/user/*" element={
+            <ProtectedRoute role="user">
+              <UserDashboard />
+            </ProtectedRoute>
+          } />
+        </Routes>
+      </Router>
+    </AuthProvider>
   );
 }
 

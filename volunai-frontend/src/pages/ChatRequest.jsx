@@ -7,7 +7,7 @@ import { createRequest, interpretRequestAI } from '../services/api';
 const STEPS = [
     {
         key: 'requesterName',
-        question: "Hi! I'm VolunAI 🤖 I'll help you request assistance. First, what is your **full name**?",
+        question: "Hi! I'm CVAS 🤖 I'll help you request assistance. First, what is your **full name**?",
         placeholder: 'e.g. Jane Smith',
         validate: v => v.trim().length >= 2,
         error: 'Please enter your name (at least 2 characters).',
@@ -198,7 +198,7 @@ export default function ChatRequest() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <div style={{ width: 40, height: 40, borderRadius: 12, background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🤖</div>
                     <div>
-                        <div style={{ fontWeight: 700, fontSize: 17, color: '#f1f5f9' }}>VolunAI Chat</div>
+                        <div style={{ fontWeight: 700, fontSize: 17, color: '#f1f5f9' }}>CVAS Chat</div>
                         <div style={{ fontSize: 12, color: '#64748b' }}>AI-powered request assistant</div>
                     </div>
                 </div>

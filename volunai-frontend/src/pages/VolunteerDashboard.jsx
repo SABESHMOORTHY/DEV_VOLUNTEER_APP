@@ -1,735 +1,606 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import {
-    Bell, User, Clock, TrendingUp, Calendar, MapPin, Star,
-    Award, CheckCircle2, XCircle, Home, Activity, Briefcase,
-    BarChart3, Heart, Zap, ChevronDown, ChevronUp, Shield
+    Bell, User, Clock, TrendingUp, MapPin, Star, Award,
+    CheckCircle2, XCircle, Home, Activity, Briefcase,
+    BarChart3, Heart, Zap, Edit2, Save, X, LogOut,
+    ToggleLeft, ToggleRight, Shield, Phone, Mail
 } from 'lucide-react';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-    ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell
+    ResponsiveContainer, PieChart, Pie, Cell, Legend
 } from 'recharts';
-import { getVolunteerById, getVolunteers, getVolunteerRequests, acceptRequest, declineRequest, completeRequestByVolunteer, toggleVolunteerAvailability, getRequests } from '../services/api';
+import {
+    getVolunteerByEmail, getVolunteerById, getVolunteerRequests,
+    acceptRequest, declineRequest, completeRequestByVolunteer,
+    toggleVolunteerAvailability, updateVolunteer
+} from '../services/api';
+import { useAuth } from '../context/AuthContext';
+
+const SKILLS = [
+    'Food Delivery', 'Medical Assistance', 'Transportation', 'Elder Care',
+    'Home Repair', 'Pet Care', 'Technical Support', 'Tutoring',
+    'Counseling', 'Community Outreach', 'Childcare', 'Shopping Assistance'
+];
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const CHART_COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#f43f5e', '#06b6d4'];
 
 const TABS = [
-    { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'notifications', label: 'Tasks', icon: Bell },
     { id: 'profile', label: 'My Profile', icon: User },
-    { id: 'history', label: 'Task History', icon: Clock },
-    { id: 'performance', label: 'Performance', icon: TrendingUp },
+    { id: 'history', label: 'History', icon: Clock },
+    { id: 'performance', label: 'Analytics', icon: TrendingUp },
 ];
 
-const CHART_COLORS = ['#8b5cf6', '#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#f43f5e'];
+function StatusBadge({ status }) {
+    const map = {
+        AVAILABLE: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+        BUSY: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+        INACTIVE: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
+    };
+    return (
+        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${map[status] || map.INACTIVE}`}>
+            {status}
+        </span>
+    );
+}
 
 export default function VolunteerDashboard() {
+    const { user, logout } = useAuth();
+    const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('notifications');
     const [toast, setToast] = useState(null);
-    const [expandedTask, setExpandedTask] = useState(null);
     const [profileEditing, setProfileEditing] = useState(false);
+    const [saving, setSaving] = useState(false);
 
-    const [allVolunteers, setAllVolunteers] = useState([]);
-    const [selectedVolId, setSelectedVolId] = useState(1);
     const [volunteer, setVolunteer] = useState(null);
     const [notifications, setNotifications] = useState([]);
     const [taskHistory, setTaskHistory] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [noProfile, setNoProfile] = useState(false);
 
-    useEffect(() => {
-        const fetchVolunteers = async () => {
-            try {
-                const res = await getVolunteers();
-                if (res.data && res.data.length > 0) {
-                    setAllVolunteers(res.data);
-                    setSelectedVolId(res.data[0].id);
-                } else {
-                    setLoading(false);
-                }
-            } catch (err) {
-                console.error("Failed to fetch volunteers:", err);
-                setLoading(false);
-            }
-        };
-        fetchVolunteers();
-    }, []);
-
-    useEffect(() => {
-        const fetchData = async () => {
-            if (!selectedVolId) return;
-            try {
-                const [volRes, requestsRes] = await Promise.all([
-                    getVolunteerById(selectedVolId),
-                    getVolunteerRequests(selectedVolId)
-                ]);
-
-                setVolunteer(volRes.data);
-                
-                const allRequests = requestsRes.data;
-                
-                // Categorize requests
-                const pending = allRequests.filter(r => r.status === 'PENDING' && !r.assigned_volunteer_id);
-                const myAssigned = allRequests.filter(r => r.is_assigned_to_me && r.status === 'ASSIGNED');
-                const completed = allRequests.filter(r => r.status === 'COMPLETED');
-                const otherAssigned = allRequests.filter(r => r.assigned_volunteer_id && !r.is_assigned_to_me && r.status === 'ASSIGNED');
-                
-                setNotifications([...pending, ...myAssigned]);
-                setTaskHistory([...completed, ...otherAssigned]);
-                setLoading(false);
-            } catch (err) {
-                console.error("Failed to fetch volunteer data:", err);
-                setLoading(false);
-            }
-        };
-
-        fetchData();
-        const interval = setInterval(fetchData, 10000); // Poll every 10s for sync
-        return () => clearInterval(interval);
-    }, [selectedVolId]);
-
-    const handleAcceptTask = async (requestId) => {
-        try {
-            await acceptRequest(requestId, selectedVolId);
-            showToast("Task accepted and assigned!", "success");
-            // Refresh data
-            const requestsRes = await getVolunteerRequests(selectedVolId);
-            const allRequests = requestsRes.data;
-            const pending = allRequests.filter(r => r.status === 'PENDING' && !r.assigned_volunteer_id);
-            const myAssigned = allRequests.filter(r => r.is_assigned_to_me && r.status === 'ASSIGNED');
-            const completed = allRequests.filter(r => r.status === 'COMPLETED');
-            const otherAssigned = allRequests.filter(r => r.assigned_volunteer_id && !r.is_assigned_to_me && r.status === 'ASSIGNED');
-            
-            setNotifications([...pending, ...myAssigned]);
-            setTaskHistory([...completed, ...otherAssigned]);
-        } catch (err) {
-            showToast("Failed to accept task", "error");
-        }
-    };
-
-    const handleDeclineTask = async (requestId) => {
-        try {
-            await declineRequest(requestId, selectedVolId);
-            showToast("Task declined", "info");
-            // Refresh data
-            const requestsRes = await getVolunteerRequests(selectedVolId);
-            const allRequests = requestsRes.data;
-            const pending = allRequests.filter(r => r.status === 'PENDING' && !r.assigned_volunteer_id);
-            const myAssigned = allRequests.filter(r => r.is_assigned_to_me && r.status === 'ASSIGNED');
-            
-            setNotifications([...pending, ...myAssigned]);
-        } catch (err) {
-            showToast("Failed to decline task", "error");
-        }
-    };
-
-    const handleCompleteTask = async (requestId) => {
-        try {
-            await completeRequestByVolunteer(requestId, selectedVolId);
-            showToast("Task marked as completed!", "success");
-            // Refresh data
-            const requestsRes = await getVolunteerRequests(selectedVolId);
-            const allRequests = requestsRes.data;
-            const pending = allRequests.filter(r => r.status === 'PENDING' && !r.assigned_volunteer_id);
-            const myAssigned = allRequests.filter(r => r.is_assigned_to_me && r.status === 'ASSIGNED');
-            const completed = allRequests.filter(r => r.status === 'COMPLETED');
-            const otherAssigned = allRequests.filter(r => r.assigned_volunteer_id && !r.is_assigned_to_me && r.status === 'ASSIGNED');
-            
-            setNotifications([...pending, ...myAssigned]);
-            setTaskHistory([...completed, ...otherAssigned]);
-        } catch (err) {
-            showToast("Failed to complete task", "error");
-        }
-    };
-
-    const handleToggleAvailability = async () => {
-        const newStatus = volunteer.availabilityStatus === 'AVAILABLE' ? 'BUSY' : 'AVAILABLE';
-        try {
-            await toggleVolunteerAvailability(selectedVolId, newStatus);
-            setVolunteer({ ...volunteer, availabilityStatus: newStatus });
-            showToast(`Status updated to ${newStatus}`, "success");
-        } catch (err) {
-            showToast("Failed to update status", "error");
-        }
-    };
-
+    // Profile edit state
+    const [editForm, setEditForm] = useState({});
+    const [editSkills, setEditSkills] = useState([]);
+    const [editDays, setEditDays] = useState([]);
 
     function showToast(msg, type = 'info') {
         setToast({ msg, type });
         setTimeout(() => setToast(null), 4000);
     }
 
-    // Old static handlers removed — now using async API handlers above
+    const refreshRequests = useCallback(async (volId) => {
+        const requestsRes = await getVolunteerRequests(volId);
+        const all = requestsRes.data;
+        setNotifications(all.filter(r => (r.status === 'PENDING' && !r.assigned_volunteer_id) || (r.is_assigned_to_me && r.status === 'ASSIGNED')));
+        setTaskHistory(all.filter(r => r.status === 'COMPLETED' || (r.assigned_volunteer_id && !r.is_assigned_to_me)));
+    }, []);
 
-    // Performance data from API
+    useEffect(() => {
+        if (!user) { navigate('/login'); return; }
+
+        const fetchProfile = async () => {
+            try {
+                // Look up volunteer profile by logged-in user's email
+                const volRes = await getVolunteerByEmail(user.email);
+                const vol = volRes.data;
+                setVolunteer(vol);
+                setEditForm({ name: vol.name, email: vol.email, phone: vol.phone || '', location: vol.location || '' });
+                setEditSkills(vol.serviceType || []);
+                setEditDays(vol.availableDays || []);
+                await refreshRequests(vol.id);
+            } catch (err) {
+                if (err.response?.status === 404) setNoProfile(true);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchProfile();
+        const interval = setInterval(() => {
+            if (volunteer?.id) refreshRequests(volunteer.id);
+        }, 10000);
+        return () => clearInterval(interval);
+    }, [user]);
+
+    const handleAcceptTask = async (requestId) => {
+        try {
+            await acceptRequest(requestId, volunteer.id);
+            showToast('Task accepted! You are now assigned.', 'success');
+            await refreshRequests(volunteer.id);
+        } catch { showToast('Failed to accept task', 'error'); }
+    };
+
+    const handleDeclineTask = async (requestId) => {
+        try {
+            await declineRequest(requestId, volunteer.id);
+            showToast('Task declined', 'info');
+            await refreshRequests(volunteer.id);
+        } catch { showToast('Failed to decline task', 'error'); }
+    };
+
+    const handleCompleteTask = async (requestId) => {
+        try {
+            await completeRequestByVolunteer(requestId, volunteer.id);
+            showToast('Task completed! Great work!', 'success');
+            const volRes = await getVolunteerById(volunteer.id);
+            setVolunteer(volRes.data);
+            await refreshRequests(volunteer.id);
+        } catch { showToast('Failed to complete task', 'error'); }
+    };
+
+    const handleToggleAvailability = async () => {
+        const newStatus = volunteer.availabilityStatus === 'AVAILABLE' ? 'BUSY' : 'AVAILABLE';
+        try {
+            await toggleVolunteerAvailability(volunteer.id, newStatus);
+            setVolunteer({ ...volunteer, availabilityStatus: newStatus });
+            showToast(`Status set to ${newStatus}`, 'success');
+        } catch { showToast('Failed to update status', 'error'); }
+    };
+
+    const handleSaveProfile = async () => {
+        setSaving(true);
+        try {
+            const res = await updateVolunteer(volunteer.id, {
+                name: editForm.name,
+                email: editForm.email,
+                phone: editForm.phone,
+                location: editForm.location,
+                serviceType: editSkills,
+                availableDays: editDays,
+            });
+            setVolunteer(res.data);
+            setProfileEditing(false);
+            showToast('Profile updated successfully!', 'success');
+        } catch { showToast('Failed to save profile', 'error'); }
+        finally { setSaving(false); }
+    };
+
+    const toggleSkill = (s) => setEditSkills(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
+    const toggleDay = (d) => setEditDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
+
+    // Analytics data
     const completedCount = volunteer?.completedTasks || taskHistory.filter(t => t.status === 'COMPLETED').length;
-    const declinedCount = taskHistory.filter(t => t.status === 'DECLINED').length;
-    const acceptedCount = notifications.length;
-    const totalTasks = taskHistory.length + notifications.length;
-    const acceptanceRate = volunteer?.acceptanceRate || (totalTasks > 0 ? ((completedCount + acceptedCount) / totalTasks) : 0);
-    const avgRating = volunteer?.reliabilityScore || volunteer?.rating || 0;
-    const avgResponseTime = 0; // Not tracked in API yet
+    const activeCount = notifications.filter(n => n.is_assigned_to_me).length;
+    const availableCount = notifications.filter(n => !n.is_assigned_to_me).length;
+    const acceptanceRate = volunteer?.acceptanceRate ? Math.round(volunteer.acceptanceRate * 100) : 0;
+    const reliabilityScore = volunteer ? Math.round((volunteer.reliabilityScore || 0) * 100) : 0;
 
-    const monthlyTrend = [
-        { month: 'Sep', rating: 4.2, tasks: 6 },
-        { month: 'Oct', rating: 4.4, tasks: 8 },
-        { month: 'Nov', rating: 4.5, tasks: 7 },
-        { month: 'Dec', rating: 4.6, tasks: 9 },
-        { month: 'Jan', rating: 4.7, tasks: 10 },
-        { month: 'Feb', rating: 4.8, tasks: 7 },
-    ];
+    const pieData = [
+        { name: 'Completed', value: completedCount || 1, color: '#10b981' },
+        { name: 'Active', value: activeCount, color: '#8b5cf6' },
+        { name: 'Available', value: availableCount, color: '#3b82f6' },
+    ].filter(d => d.value > 0);
 
     const serviceBreakdown = {};
     taskHistory.forEach(t => {
-        serviceBreakdown[t.serviceType] = (serviceBreakdown[t.serviceType] || 0) + 1;
+        const key = t.service_type || t.serviceType || 'Other';
+        serviceBreakdown[key] = (serviceBreakdown[key] || 0) + 1;
     });
-    const serviceChartData = Object.entries(serviceBreakdown).map(([name, value]) => ({ name, value }));
+    const barData = Object.entries(serviceBreakdown).map(([name, count]) => ({ name: name.split(' ')[0], count }));
 
-    const statusPieData = [
-        { name: 'Completed', value: completedCount },
-        { name: 'Accepted', value: acceptedCount },
-        { name: 'Declined', value: declinedCount },
-    ];
+    // Loading state
+    if (loading) return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-950 to-slate-900 flex items-center justify-center">
+            <div className="text-center">
+                <div className="text-5xl mb-4 animate-spin">⚙️</div>
+                <p className="text-slate-400 text-lg">Loading your dashboard...</p>
+            </div>
+        </div>
+    );
 
-    if (loading) {
-        return (
-            <div className="app-layout">
-                <div className="main-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-                    <div className="glass-card" style={{ textAlign: 'center', padding: 40 }}>
-                        <div style={{ fontSize: 40, marginBottom: 16 }}>🔄</div>
-                        <h3>Loading Volunteer Dashboard...</h3>
-                        <p style={{ color: 'var(--text-muted)', marginTop: 8 }}>Fetching your profile and assignments</p>
-                    </div>
+    // No volunteer profile yet
+    if (noProfile) return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-950 to-slate-900 flex items-center justify-center p-4">
+            <div className="bg-slate-800/60 backdrop-blur-xl border border-slate-700/50 rounded-2xl p-10 text-center max-w-md shadow-2xl">
+                <div className="text-6xl mb-4">👋</div>
+                <h2 className="text-2xl font-bold text-white mb-2">No Volunteer Profile Found</h2>
+                <p className="text-slate-400 mb-6 leading-relaxed">
+                    Your account (<strong className="text-purple-400">{user?.email}</strong>) doesn't have a volunteer profile yet.
+                </p>
+                <div className="flex gap-3 justify-center flex-wrap">
+                    <Link to="/register" className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold text-sm hover:from-purple-600 hover:to-blue-600 transition-all">
+                        Register Profile
+                    </Link>
+                    <button onClick={logout} className="px-5 py-2.5 rounded-xl border border-slate-600 text-slate-300 text-sm hover:border-slate-500 hover:text-white transition-all">
+                        Sign Out
+                    </button>
                 </div>
             </div>
-        );
-    }
-
-    if (!volunteer && allVolunteers.length === 0) {
-        return (
-            <div className="app-layout">
-                <div className="main-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '40px 20px' }}>
-                    <div className="glass-card" style={{ textAlign: 'center', padding: 48, maxWidth: 500 }}>
-                        <div style={{ fontSize: 56, marginBottom: 16 }}>👋</div>
-                        <h2 style={{ marginBottom: 8 }}>No Volunteers Found</h2>
-                        <p style={{ color: 'var(--text-muted)', marginBottom: 24, lineHeight: 1.6 }}>
-                            There are no registered volunteers in the system yet.
-                            Please register as a volunteer first to access this dashboard.
-                        </p>
-                        <div className="flex gap-12" style={{ justifyContent: 'center', flexWrap: 'wrap' }}>
-                            <Link to="/register-volunteer" className="btn btn-primary" style={{ textDecoration: 'none' }}>
-                                <User size={16} /> Register as Volunteer
-                            </Link>
-                            <Link to="/" className="btn btn-ghost" style={{ textDecoration: 'none' }}>
-                                <Home size={16} /> Back to Home
-                            </Link>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    }
+        </div>
+    );
 
     return (
         <div className="app-layout">
-            {/* Sidebar */}
+            {/* ── Sidebar ── */}
             <div className="sidebar">
                 <div className="sidebar-logo">
                     <div className="logo-icon">🤖</div>
                     <div>
-                        <h1>VolunAI</h1>
+                        <h1>CVAS</h1>
                         <span>Volunteer Panel</span>
                     </div>
                 </div>
 
-                {/* Volunteer Selector */}
-                <div style={{ padding: '8px 16px' }}>
-                    <select
-                        value={selectedVolId}
-                        onChange={e => setSelectedVolId(Number(e.target.value))}
-                        style={{ width: '100%', padding: '8px 10px', borderRadius: 8, background: 'var(--bg-glass)', color: 'var(--text-primary)', border: '1px solid var(--border-glass)', fontSize: 13 }}>
-                        {allVolunteers.map(v => (
-                            <option key={v.id} value={v.id}>{v.name}</option>
-                        ))}
-                    </select>
-                </div>
-
-                {/* Profile Summary */}
-                <div className="vol-profile-mini">
-                    <div className="profile-avatar" style={{ width: 44, height: 44, fontSize: 18 }}>
-                        {volunteer.name?.charAt(0)}
-                    </div>
-                    <div>
-                        <div style={{ fontWeight: 600, fontSize: 14 }}>{volunteer.name}</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                            <MapPin size={10} style={{ marginRight: 2 }} />{volunteer.location} · ⭐ {volunteer.rating}
+                {/* Volunteer Identity Card */}
+                {volunteer && (
+                    <div style={{ padding: '12px 8px', marginBottom: 16 }}>
+                        <div style={{
+                            background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)',
+                            borderRadius: 12, padding: '14px 14px 10px'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                                <div style={{
+                                    width: 36, height: 36, borderRadius: '50%',
+                                    background: 'linear-gradient(135deg,#8b5cf6,#3b82f6)',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    fontSize: 16, fontWeight: 700, color: 'white', flexShrink: 0
+                                }}>
+                                    {volunteer.name?.[0]?.toUpperCase()}
+                                </div>
+                                <div style={{ minWidth: 0 }}>
+                                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        {volunteer.name}
+                                    </div>
+                                    <StatusBadge status={volunteer.availabilityStatus || 'AVAILABLE'} />
+                                </div>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
+                                <MapPin size={11} /> {volunteer.location || 'No location set'}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--accent-amber)' }}>
+                                <Star size={11} /> {(volunteer.rating || 0).toFixed(1)} rating · {completedCount} tasks
+                            </div>
                         </div>
-                        <span className={`badge ${volunteer.availabilityStatus === 'AVAILABLE' ? 'badge-completed' : 'badge-medium'}`}
-                            style={{ fontSize: 10, marginTop: 4, display: 'inline-flex' }}>
-                            ● {volunteer.availabilityStatus}
-                        </span>
                     </div>
-                </div>
+                )}
 
+                {/* Nav */}
                 <div className="sidebar-section">
                     <div className="sidebar-section-title">Navigation</div>
                     {TABS.map(tab => (
-                        <div key={tab.id}
+                        <button key={tab.id} onClick={() => setActiveTab(tab.id)}
                             className={`sidebar-link ${activeTab === tab.id ? 'active' : ''}`}
-                            onClick={() => setActiveTab(tab.id)}>
-                            <tab.icon size={18} className="link-icon" />
-                            {tab.label}
-                            {tab.id === 'notifications' && notifications.length > 0 && (
-                                <span className="notification-badge">{notifications.length}</span>
-                            )}
-                        </div>
+                            style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer' }}>
+                            <tab.icon size={18} className="link-icon" /> {tab.label}
+                        </button>
                     ))}
                 </div>
 
-                <div style={{ marginTop: 'auto', padding: '16px 0', borderTop: '1px solid var(--border-glass)' }}>
-                    <Link to="/" className="sidebar-link">
-                        <Home size={18} className="link-icon" /> Back to Home
-                    </Link>
+                {/* Availability Toggle */}
+                <div style={{ marginTop: 'auto', padding: '0 8px' }}>
+                    <button onClick={handleToggleAvailability}
+                        className="btn btn-ghost"
+                        style={{ width: '100%', justifyContent: 'center', gap: 8, marginBottom: 8 }}>
+                        {volunteer?.availabilityStatus === 'AVAILABLE'
+                            ? <><ToggleRight size={18} color="#10b981" /> Set Busy</>
+                            : <><ToggleLeft size={18} color="#f59e0b" /> Set Available</>}
+                    </button>
+                    <button onClick={() => { logout(); navigate('/login'); }}
+                        className="btn btn-ghost"
+                        style={{ width: '100%', justifyContent: 'center', color: 'var(--accent-rose)' }}>
+                        <LogOut size={16} /> Sign Out
+                    </button>
                 </div>
             </div>
 
-            {/* Main Content */}
+            {/* ── Main Content ── */}
             <div className="main-content">
 
-                {/* ── Notifications Tab ── */}
+                {/* ─── TASKS / NOTIFICATIONS TAB ─── */}
                 {activeTab === 'notifications' && (
-                    <>
+                    <div>
                         <div className="page-header">
-                            <h2>🔔 Task Notifications</h2>
-                            <p>AI-matched service requests awaiting your response</p>
+                            <h2><Bell size={24} style={{ display: 'inline', marginRight: 8 }} />My Tasks</h2>
+                            <p>{notifications.length} active task{notifications.length !== 1 ? 's' : ''} — respond to incoming requests below</p>
                         </div>
 
-                        <div className="stats-grid">
-                            <div className="stat-card" style={{ animationDelay: '0.1s' }}>
-                                <div className="stat-icon purple"><Bell size={24} /></div>
-                                <div className="stat-info"><h3>{notifications.length}</h3><p>Pending Tasks</p></div>
-                            </div>
-                            <div className="stat-card" style={{ animationDelay: '0.2s' }}>
-                                <div className="stat-icon green"><CheckCircle2 size={24} /></div>
-                                <div className="stat-info"><h3>{completedCount}</h3><p>Completed</p></div>
-                            </div>
-                            <div className="stat-card" style={{ animationDelay: '0.3s' }}>
-                                <div className="stat-icon cyan"><Award size={24} /></div>
-                                <div className="stat-info"><h3>{volunteer.rating}</h3><p>Reliability Score</p></div>
-                            </div>
-                            <div className="stat-card" style={{ animationDelay: '0.4s' }}>
-                                <div className="stat-icon amber"><Clock size={24} /></div>
-                                <div className="stat-info"><h3>{avgResponseTime}m</h3><p>Avg Response</p></div>
-                            </div>
-                        </div>
-
-                        {notifications.length > 0 ? (
-                            <div className="vol-notifications-list">
-                                {notifications.map((task, idx) => (
-                                    <div key={task.id}
-                                        className={`notification-card ${task.urgency_level?.toLowerCase()}`}
-                                        style={{ animationDelay: `${idx * 0.1}s` }}>
-
-                                        <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
-                                            <div className="flex items-center gap-12">
-                                                <div className="vol-task-icon">
-                                                    {task.service_type === 'Food Delivery' ? '🍽️' :
-                                                        task.service_type === 'Medical Assistance' ? '🏥' :
-                                                            task.service_type === 'Transportation' ? '🚗' :
-                                                                task.service_type === 'Elder Care' ? '👴' :
-                                                                    task.service_type === 'Home Repair' ? '🔧' : '📋'}
-                                                </div>
-                                                <div>
-                                                    <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 2 }}>
-                                                        {task.service_type}
-                                                    </div>
-                                                    <div className="flex items-center gap-8" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                                                        <span><MapPin size={11} style={{ marginRight: 3 }} />{task.location}</span>
-                                                        <span><User size={11} style={{ marginRight: 3 }} />{task.requester_name}</span>
-                                                        {task.is_assigned_to_me && <span style={{ color: 'var(--accent-green)' }}>✓ Assigned to You</span>}
-                                                        {task.assigned_volunteer && !task.is_assigned_to_me && <span style={{ color: 'var(--accent-amber)' }}>Assigned to {task.assigned_volunteer}</span>}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div style={{ textAlign: 'right' }}>
-                                                <span className={`badge badge-${task.urgency_level?.toLowerCase()}`}>
-                                                    {task.urgency_level}
-                                                </span>
-                                                <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent-purple-light)', marginTop: 4 }}>
-                                                    {Math.round((task.match_score || 0.8) * 100)}%
-                                                </div>
-                                                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Match Score</div>
-                                            </div>
-                                        </div>
-
-                                        <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.6 }}>
-                                            {task.description}
-                                        </p>
-
-                                        <div className="flex gap-8">
-                                            {task.can_accept ? (
-                                                <>
-                                                    <button onClick={() => handleAcceptTask(task.id)}
-                                                        className="btn btn-success btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
-                                                        <CheckCircle2 size={16} /> Accept Task
-                                                    </button>
-                                                    <button onClick={() => handleDeclineTask(task.id)}
-                                                        className="btn btn-ghost btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
-                                                        <XCircle size={16} /> Decline
-                                                    </button>
-                                                </>
-                                            ) : task.can_complete ? (
-                                                <>
-                                                    <button onClick={() => handleCompleteTask(task.id)}
-                                                        className="btn btn-success btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
-                                                        <CheckCircle2 size={16} /> Mark Complete
-                                                    </button>
-                                                </>
-                                            ) : (
-                                                <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', width: '100%' }}>
-                                                    {task.assigned_volunteer ? `Assigned to ${task.assigned_volunteer}` : 'No longer available'}
-                                                </div>
-                                            )}
-                                        </div>
+                        {/* Stats row */}
+                        <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(3,1fr)', marginBottom: 28 }}>
+                            {[
+                                { label: 'Pending Requests', value: notifications.filter(n => !n.is_assigned_to_me).length, color: 'blue', icon: Bell },
+                                { label: 'Assigned to Me', value: notifications.filter(n => n.is_assigned_to_me).length, color: 'purple', icon: Briefcase },
+                                { label: 'Completed', value: completedCount, color: 'green', icon: CheckCircle2 },
+                            ].map((s, i) => (
+                                <div key={i} className="stat-card">
+                                    <div className={`stat-icon ${s.color}`}><s.icon size={22} /></div>
+                                    <div className="stat-info">
+                                        <h3>{s.value}</h3>
+                                        <p>{s.label}</p>
                                     </div>
-                                ))}
+                                </div>
+                            ))}
+                        </div>
+
+                        {notifications.length === 0 ? (
+                            <div className="glass-card" style={{ textAlign: 'center', padding: 48 }}>
+                                <div style={{ fontSize: 48, marginBottom: 12, opacity: 0.5 }}>📭</div>
+                                <h3 style={{ marginBottom: 8 }}>No Active Tasks</h3>
+                                <p style={{ color: 'var(--text-muted)' }}>You'll be notified when new requests match your skills.</p>
                             </div>
                         ) : (
-                            <div className="glass-card">
-                                <div className="empty-state">
-                                    <div className="empty-icon">🔔</div>
-                                    <p>No new task notifications</p>
-                                    <p style={{ fontSize: 12, marginTop: 4 }}>Check back later for new AI-matched opportunities</p>
+                            notifications.map((task, i) => (
+                                <div key={task.id || i} className={`notification-card ${task.urgency_level === 'HIGH' ? 'urgent' : task.urgency_level === 'MEDIUM' ? 'medium' : 'low'}`}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                                        <div>
+                                            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
+                                                {task.service_type || task.serviceType}
+                                            </div>
+                                            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                                                Requested by: <strong>{task.requester_name}</strong> — {task.location}
+                                            </div>
+                                        </div>
+                                        <span className={`badge badge-${(task.urgency_level || '').toLowerCase()}`}>
+                                            {task.urgency_level}
+                                        </span>
+                                    </div>
+                                    {task.description && (
+                                        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16, lineHeight: 1.6 }}>
+                                            {task.description}
+                                        </p>
+                                    )}
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        {task.is_assigned_to_me && task.status === 'ASSIGNED' ? (
+                                            <>
+                                                <button onClick={() => handleCompleteTask(task.id)} className="btn btn-success btn-sm">
+                                                    <CheckCircle2 size={14} /> Mark Complete
+                                                </button>
+                                            </>
+                                        ) : task.can_accept ? (
+                                            <>
+                                                <button onClick={() => handleAcceptTask(task.id)} className="btn btn-success btn-sm">
+                                                    <CheckCircle2 size={14} /> Accept
+                                                </button>
+                                                <button onClick={() => handleDeclineTask(task.id)} className="btn btn-danger btn-sm">
+                                                    <XCircle size={14} /> Decline
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                                ℹ️ {task.status === 'ASSIGNED' ? 'Assigned to another volunteer' : task.status}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
+                            ))
                         )}
-                    </>
+                    </div>
                 )}
 
-                {/* ── Profile Tab ── */}
-                {activeTab === 'profile' && (
-                    <>
-                        <div className="page-header">
-                            <h2>👤 My Profile</h2>
-                            <p>Manage your volunteer profile, skills, and availability</p>
+                {/* ─── PROFILE TAB ─── */}
+                {activeTab === 'profile' && volunteer && (
+                    <div>
+                        <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div>
+                                <h2><User size={24} style={{ display: 'inline', marginRight: 8 }} />My Profile</h2>
+                                <p>View and edit your volunteer profile details</p>
+                            </div>
+                            <button
+                                onClick={() => profileEditing ? handleSaveProfile() : setProfileEditing(true)}
+                                disabled={saving}
+                                className={`btn ${profileEditing ? 'btn-primary' : 'btn-ghost'}`}>
+                                {saving ? '⏳ Saving...' : profileEditing ? <><Save size={16} /> Save Changes</> : <><Edit2 size={16} /> Edit Profile</>}
+                            </button>
+                            {profileEditing && (
+                                <button onClick={() => setProfileEditing(false)} className="btn btn-ghost" style={{ marginLeft: 8 }}>
+                                    <X size={16} /> Cancel
+                                </button>
+                            )}
                         </div>
 
-                        <div className="grid-2">
-                            {/* Contact Info */}
+                        <div className="grid-2" style={{ gap: 24 }}>
+                            {/* Personal Info */}
                             <div className="glass-card">
-                                <div className="card-title"><User size={18} /> Contact Information</div>
-                                <div className="vol-profile-section">
-                                    <div className="profile-header" style={{ marginBottom: 24 }}>
-                                        <div className="profile-avatar">
-                                            {volunteer.name?.charAt(0)}
-                                        </div>
-                                        <div>
-                                            <h3 style={{ fontSize: 22, fontWeight: 700, marginBottom: 2 }}>{volunteer.name}</h3>
-                                            <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
-                                                <MapPin size={12} style={{ marginRight: 4 }} />{volunteer.location}
+                                <div className="card-title"><User size={18} /> Personal Information</div>
+                                {['name', 'email', 'phone', 'location'].map(field => (
+                                    <div key={field} style={{ marginBottom: 16 }}>
+                                        <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 6 }}>
+                                            {field === 'phone' ? 'Phone Number' : field.charAt(0).toUpperCase() + field.slice(1)}
+                                        </label>
+                                        {profileEditing ? (
+                                            <input
+                                                type={field === 'email' ? 'email' : 'text'}
+                                                value={editForm[field] || ''}
+                                                onChange={e => setEditForm({ ...editForm, [field]: e.target.value })}
+                                                className="form-input"
+                                            />
+                                        ) : (
+                                            <div style={{ fontSize: 14, color: 'var(--text-primary)', padding: '10px 0' }}>
+                                                {volunteer[field] || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Not set</span>}
                                             </div>
-                                            <span className={`badge ${volunteer.active ? 'badge-completed' : 'badge-high'}`}
-                                                style={{ marginTop: 8, display: 'inline-flex' }}>
-                                                {volunteer.active ? '● Active' : '● Inactive'}
-                                            </span>
-                                            <div style={{ marginTop: 12 }}>
-                                                <button onClick={handleToggleAvailability}
-                                                    className={`btn btn-sm ${volunteer.availabilityStatus === 'AVAILABLE' ? 'btn-success' : 'btn-ghost'}`}
-                                                    style={{ fontSize: 12 }}>
-                                                    {volunteer.availabilityStatus === 'AVAILABLE' ? '✅ Available' : '⏸ Set Available'}
-                                                </button>
-                                            </div>
-                                        </div>
+                                        )}
                                     </div>
+                                ))}
 
-                                    <div className="vol-info-grid">
-                                        <div className="vol-info-item">
-                                            <span className="vol-info-label">Email</span>
-                                            <span className="vol-info-value">{volunteer.email}</span>
+                                {/* Stats */}
+                                <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border-glass)' }}>
+                                    {[
+                                        { label: 'Rating', value: `⭐ ${(volunteer.rating || 0).toFixed(1)} / 5.0` },
+                                        { label: 'Completed Tasks', value: volunteer.completedTasks || 0 },
+                                        { label: 'Acceptance Rate', value: `${Math.round((volunteer.acceptanceRate || 0) * 100)}%` },
+                                        { label: 'Reliability', value: `${Math.round((volunteer.reliabilityScore || 0) * 100)}%` },
+                                        { label: 'Status', value: <StatusBadge status={volunteer.availabilityStatus || 'AVAILABLE'} /> },
+                                    ].map(({ label, value }) => (
+                                        <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                                            <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{label}</span>
+                                            <span style={{ fontSize: 13, fontWeight: 600 }}>{value}</span>
                                         </div>
-                                        <div className="vol-info-item">
-                                            <span className="vol-info-label">Phone</span>
-                                            <span className="vol-info-value">{volunteer.phone}</span>
-                                        </div>
-                                        <div className="vol-info-item">
-                                            <span className="vol-info-label">Location</span>
-                                            <span className="vol-info-value">{volunteer.location}</span>
-                                        </div>
-                                        <div className="vol-info-item">
-                                            <span className="vol-info-label">Volunteer ID</span>
-                                            <span className="vol-info-value">#{volunteer.id}</span>
-                                        </div>
-                                    </div>
+                                    ))}
                                 </div>
                             </div>
 
                             {/* Skills & Availability */}
                             <div className="glass-card">
-                                <div className="card-title"><Zap size={18} /> Skills & Availability</div>
+                                <div className="card-title"><Briefcase size={18} /> Skills & Availability</div>
 
                                 <div style={{ marginBottom: 24 }}>
-                                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
-                                        Service Types
-                                    </div>
-                                    <div className="chip-group">
-                                        {volunteer.serviceType?.map((s, i) => (
-                                            <span key={i} className="chip active">
-                                                <Briefcase size={12} /> {s}
-                                            </span>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div style={{ marginBottom: 24 }}>
-                                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
-                                        Available Days
-                                    </div>
-                                    <div className="chip-group">
-                                        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => {
-                                            const fullDay = { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' }[day];
-                                            const isAvail = volunteer.availableDays?.includes(fullDay);
-                                            return (
-                                                <span key={day} className={`chip ${isAvail ? 'active' : ''}`}>
-                                                    <Calendar size={12} /> {day}
+                                    <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 10 }}>
+                                        Services You Offer
+                                    </label>
+                                    {profileEditing ? (
+                                        <div className="chip-group">
+                                            {SKILLS.map(s => (
+                                                <span key={s} className={`chip ${editSkills.includes(s) ? 'active' : ''}`}
+                                                    onClick={() => toggleSkill(s)} style={{ cursor: 'pointer' }}>
+                                                    {s}
                                                 </span>
-                                            );
-                                        })}
-                                    </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="chip-group">
+                                            {(volunteer.serviceType || []).length > 0
+                                                ? (volunteer.serviceType || []).map(s => <span key={s} className="chip active">{s}</span>)
+                                                : <span style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic' }}>No skills listed yet</span>
+                                            }
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div>
-                                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>
-                                        Performance Summary
-                                    </div>
-                                    <div className="vol-perf-mini-grid">
-                                        <div className="vol-perf-mini-card">
-                                            <div className="vol-perf-value" style={{ color: 'var(--accent-purple)' }}>{volunteer.rating}</div>
-                                            <div className="vol-perf-label">Rating</div>
-                                        </div>
-                                        <div className="vol-perf-mini-card">
-                                            <div className="vol-perf-value" style={{ color: 'var(--accent-green)' }}>{completedCount}</div>
-                                            <div className="vol-perf-label">Completed</div>
-                                        </div>
-                                        <div className="vol-perf-mini-card">
-                                            <div className="vol-perf-value" style={{ color: 'var(--accent-cyan)' }}>
-                                                {Math.round(acceptanceRate * 100)}%
-                                            </div>
-                                            <div className="vol-perf-label">Acceptance</div>
-                                        </div>
-                                        <div className="vol-perf-mini-card">
-                                            <div className="vol-perf-value" style={{ color: 'var(--accent-amber)' }}>{avgResponseTime}m</div>
-                                            <div className="vol-perf-label">Avg Response</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </>
-                )}
-
-                {/* ── Task History Tab ── */}
-                {activeTab === 'history' && (
-                    <>
-                        <div className="page-header">
-                            <h2>📋 Task History</h2>
-                            <p>{taskHistory.length} total assignments · {completedCount} completed · {declinedCount} declined</p>
-                        </div>
-
-                        <div className="glass-card">
-                            <table className="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Service</th>
-                                        <th>Requester</th>
-                                        <th>Location</th>
-                                        <th>Status</th>
-                                        <th>Assigned To</th>
-                                        <th>Match Score</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {taskHistory.map(task => (
-                                        <tr key={task.id}>
-                                            <td>
-                                                <div style={{ fontWeight: 600, fontSize: 13 }}>{task.service_type || '—'}</div>
-                                            </td>
-                                            <td>{task.requester_name || '—'}</td>
-                                            <td><MapPin size={11} style={{ marginRight: 3 }} />{task.location || '—'}</td>
-                                            <td>
-                                                <span className={`badge badge-${task.status?.toLowerCase()}`}>
-                                                    {task.status}
+                                    <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, display: 'block', marginBottom: 10 }}>
+                                        Available Days
+                                    </label>
+                                    {profileEditing ? (
+                                        <div className="chip-group">
+                                            {DAYS.map(d => (
+                                                <span key={d} className={`chip ${editDays.includes(d) ? 'active' : ''}`}
+                                                    onClick={() => toggleDay(d)} style={{ cursor: 'pointer' }}>
+                                                    {d.slice(0, 3)}
                                                 </span>
-                                            </td>
-                                            <td>
-                                                {task.assigned_volunteer ? (
-                                                    <span style={{ color: task.is_assigned_to_me ? 'var(--accent-green)' : 'var(--text-secondary)' }}>
-                                                        {task.is_assigned_to_me ? 'You' : task.assigned_volunteer}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-muted" style={{ fontSize: 12 }}>—</span>
-                                                )}
-                                            </td>
-                                            <td>
-                                                {task.match_score > 0 ? (
-                                                    <span style={{ fontWeight: 600, color: 'var(--accent-purple-light)' }}>
-                                                        {Math.round(task.match_score * 100)}%
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-muted" style={{ fontSize: 12 }}>—</span>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="chip-group">
+                                            {(volunteer.availableDays || []).length > 0
+                                                ? (volunteer.availableDays || []).map(d => <span key={d} className="chip active">{d.slice(0, 3)}</span>)
+                                                : <span style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic' }}>No days listed yet</span>
+                                            }
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
-                    </>
+                    </div>
                 )}
 
-                {/* ── Performance Tab ── */}
-                {activeTab === 'performance' && (
-                    <>
+                {/* ─── TASK HISTORY TAB ─── */}
+                {activeTab === 'history' && (
+                    <div>
                         <div className="page-header">
-                            <h2>📈 Performance Analytics</h2>
-                            <p>Your AI-tracked performance metrics and reliability insights</p>
+                            <h2><Clock size={24} style={{ display: 'inline', marginRight: 8 }} />Task History</h2>
+                            <p>{taskHistory.length} tasks in your history</p>
                         </div>
-
-                        <div className="stats-grid">
-                            <div className="stat-card" style={{ animationDelay: '0.1s' }}>
-                                <div className="stat-icon purple"><Award size={24} /></div>
-                                <div className="stat-info">
-                                    <h3>{volunteer.rating}</h3>
-                                    <p>Reliability Score</p>
-                                </div>
-                            </div>
-                            <div className="stat-card" style={{ animationDelay: '0.2s' }}>
-                                <div className="stat-icon green"><CheckCircle2 size={24} /></div>
-                                <div className="stat-info">
-                                    <h3>{Math.round(acceptanceRate * 100)}%</h3>
-                                    <p>Acceptance Rate</p>
-                                </div>
-                            </div>
-                            <div className="stat-card" style={{ animationDelay: '0.3s' }}>
-                                <div className="stat-icon blue"><Star size={24} /></div>
-                                <div className="stat-info">
-                                    <h3>{avgRating.toFixed(1)}</h3>
-                                    <p>Avg Task Rating</p>
-                                </div>
-                            </div>
-                            <div className="stat-card" style={{ animationDelay: '0.4s' }}>
-                                <div className="stat-icon cyan"><Clock size={24} /></div>
-                                <div className="stat-info">
-                                    <h3>{avgResponseTime}m</h3>
-                                    <p>Avg Response Time</p>
-                                </div>
-                            </div>
-                            <div className="stat-card" style={{ animationDelay: '0.5s' }}>
-                                <div className="stat-icon amber"><Briefcase size={24} /></div>
-                                <div className="stat-info">
-                                    <h3>{totalTasks}</h3>
-                                    <p>Total Tasks</p>
-                                </div>
-                            </div>
-                            <div className="stat-card" style={{ animationDelay: '0.6s' }}>
-                                <div className="stat-icon rose"><Heart size={24} /></div>
-                                <div className="stat-info">
-                                    <h3>{completedCount}</h3>
-                                    <p>Tasks Completed</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="grid-2 mb-24">
-                            {/* Rating Trend */}
-                            <div className="glass-card">
-                                <div className="card-title"><TrendingUp size={18} /> Rating Trend (6 Months)</div>
-                                <ResponsiveContainer width="100%" height={240}>
-                                    <AreaChart data={monthlyTrend}>
-                                        <defs>
-                                            <linearGradient id="ratingGrad" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.3} />
-                                                <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.02} />
-                                            </linearGradient>
-                                        </defs>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                                        <XAxis dataKey="month" stroke="#64748b" fontSize={12} />
-                                        <YAxis stroke="#64748b" fontSize={12} domain={[3.5, 5]} />
-                                        <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
-                                        <Area type="monotone" dataKey="rating" stroke="#8b5cf6" strokeWidth={2}
-                                            fill="url(#ratingGrad)" dot={{ fill: '#8b5cf6', r: 4 }} />
-                                    </AreaChart>
-                                </ResponsiveContainer>
-                            </div>
-
-                            {/* Tasks Per Month */}
-                            <div className="glass-card">
-                                <div className="card-title"><BarChart3 size={18} /> Monthly Task Volume</div>
-                                <ResponsiveContainer width="100%" height={240}>
-                                    <BarChart data={monthlyTrend}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                                        <XAxis dataKey="month" stroke="#64748b" fontSize={12} />
-                                        <YAxis stroke="#64748b" fontSize={12} />
-                                        <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
-                                        <Bar dataKey="tasks" fill="#06b6d4" radius={[6, 6, 0, 0]} />
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
-
-                        <div className="grid-2 mb-24">
-                            {/* Service Type Breakdown */}
-                            <div className="glass-card">
-                                <div className="card-title"><Briefcase size={18} /> Service Type Breakdown</div>
-                                <ResponsiveContainer width="100%" height={240}>
-                                    <PieChart>
-                                        <Pie data={serviceChartData} cx="50%" cy="50%" outerRadius={80} dataKey="value"
-                                            label={({ name, value }) => `${name}: ${value}`}>
-                                            {serviceChartData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i]} />)}
-                                        </Pie>
-                                        <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
-                                    </PieChart>
-                                </ResponsiveContainer>
-                            </div>
-
-                            {/* Task Status Distribution */}
-                            <div className="glass-card">
-                                <div className="card-title"><Shield size={18} /> Task Outcome Distribution</div>
-                                <ResponsiveContainer width="100%" height={240}>
-                                    <PieChart>
-                                        <Pie data={statusPieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value"
-                                            label={({ name, value }) => `${name}: ${value}`}>
-                                            {statusPieData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i + 2]} />)}
-                                        </Pie>
-                                        <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
-                                    </PieChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
-
-                        {/* AI Matching Formula */}
                         <div className="glass-card">
-                            <div className="card-title"><Zap size={18} /> How AI Scores You</div>
-                            <div style={{ background: 'var(--bg-glass)', borderRadius: 'var(--radius-md)', padding: 20, fontFamily: 'monospace', fontSize: 13, lineHeight: 2 }}>
-                                <span style={{ color: 'var(--accent-purple-light)' }}>match_score</span> = {'\n'}
-                                &nbsp;&nbsp;(<span style={{ color: 'var(--accent-cyan)' }}>0.25</span> × availability_score) + {'\n'}
-                                &nbsp;&nbsp;(<span style={{ color: 'var(--accent-cyan)' }}>0.20</span> × proximity_score) + {'\n'}
-                                &nbsp;&nbsp;(<span style={{ color: 'var(--accent-cyan)' }}>0.25</span> × skill_match_score) + {'\n'}
-                                &nbsp;&nbsp;(<span style={{ color: 'var(--accent-cyan)' }}>0.15</span> × reliability_score) + {'\n'}
-                                &nbsp;&nbsp;(<span style={{ color: 'var(--accent-cyan)' }}>0.15</span> × predicted_acceptance)
-                            </div>
-                            <p style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
-                                Your scores are dynamically calculated by the Adaptive Learning Engine. Higher reliability and acceptance rates improve your match ranking.
-                            </p>
+                            {taskHistory.length === 0 ? (
+                                <div className="empty-state">
+                                    <div className="empty-icon">📋</div>
+                                    <p>No task history yet. Complete your first task to see it here.</p>
+                                </div>
+                            ) : (
+                                <table className="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Service</th>
+                                            <th>Requester</th>
+                                            <th>Location</th>
+                                            <th>Urgency</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {taskHistory.map((t, i) => (
+                                            <tr key={t.id || i}>
+                                                <td style={{ fontWeight: 600 }}>{t.service_type || t.serviceType}</td>
+                                                <td style={{ color: 'var(--text-secondary)' }}>{t.requester_name || t.requesterName}</td>
+                                                <td style={{ color: 'var(--text-muted)' }}><MapPin size={12} style={{ display: 'inline', marginRight: 4 }} />{t.location}</td>
+                                                <td><span className={`badge badge-${(t.urgency_level || '').toLowerCase()}`}>{t.urgency_level}</span></td>
+                                                <td><span className={`badge badge-${(t.status || '').toLowerCase()}`}>{t.status}</span></td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
                         </div>
-                    </>
+                    </div>
                 )}
 
-                {/* Toast */}
-                {toast && (
-                    <div className={`toast ${toast.type}`}>
-                        {toast.type === 'success' && <CheckCircle2 size={18} color="var(--accent-green)" />}
-                        {toast.type === 'error' && <XCircle size={18} color="var(--accent-rose)" />}
-                        {toast.type === 'info' && <Bell size={18} color="var(--accent-blue)" />}
-                        <span style={{ fontSize: 14 }}>{toast.msg}</span>
+                {/* ─── PERFORMANCE TAB ─── */}
+                {activeTab === 'performance' && (
+                    <div>
+                        <div className="page-header">
+                            <h2><TrendingUp size={24} style={{ display: 'inline', marginRight: 8 }} />Performance Analytics</h2>
+                            <p>Your volunteer performance metrics and task statistics</p>
+                        </div>
+
+                        {/* KPI cards */}
+                        <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(4,1fr)', marginBottom: 28 }}>
+                            {[
+                                { label: 'Rating', value: `${(volunteer?.rating || 0).toFixed(1)}⭐`, color: 'amber', icon: Star },
+                                { label: 'Acceptance Rate', value: `${acceptanceRate}%`, color: 'green', icon: CheckCircle2 },
+                                { label: 'Reliability Score', value: `${reliabilityScore}%`, color: 'purple', icon: Shield },
+                                { label: 'Total Completed', value: completedCount, color: 'cyan', icon: Award },
+                            ].map((s, i) => (
+                                <div key={i} className="stat-card">
+                                    <div className={`stat-icon ${s.color}`}><s.icon size={22} /></div>
+                                    <div className="stat-info">
+                                        <h3>{s.value}</h3>
+                                        <p>{s.label}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="grid-2" style={{ gap: 24 }}>
+                            {/* Task Status Pie */}
+                            <div className="glass-card">
+                                <div className="card-title"><Activity size={18} /> Task Status Breakdown</div>
+                                <ResponsiveContainer width="100%" height={220}>
+                                    <PieChart>
+                                        <Pie data={pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={85}
+                                            dataKey="value" paddingAngle={3}>
+                                            {pieData.map((entry, i) => (
+                                                <Cell key={i} fill={entry.color} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip formatter={(v, n) => [v, n]} />
+                                        <Legend />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            </div>
+
+                            {/* Service Breakdown Bar */}
+                            <div className="glass-card">
+                                <div className="card-title"><BarChart3 size={18} /> Tasks by Service Type</div>
+                                {barData.length > 0 ? (
+                                    <ResponsiveContainer width="100%" height={220}>
+                                        <BarChart data={barData}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                                            <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} />
+                                            <YAxis tick={{ fill: '#64748b', fontSize: 11 }} />
+                                            <Tooltip contentStyle={{ background: '#111827', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
+                                            <Bar dataKey="count" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                ) : (
+                                    <div className="empty-state" style={{ paddingTop: 32 }}>
+                                        <p>Complete tasks to see breakdown here</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>
+
+            {/* Toast */}
+            {toast && (
+                <div className={`toast ${toast.type}`}>
+                    {toast.type === 'success' && <CheckCircle2 size={18} color="var(--accent-green)" />}
+                    {toast.type === 'error' && <XCircle size={18} color="var(--accent-rose)" />}
+                    {toast.type === 'info' && <Bell size={18} color="var(--accent-blue)" />}
+                    <span style={{ fontSize: 14 }}>{toast.msg}</span>
+                </div>
+            )}
         </div>
     );
 }

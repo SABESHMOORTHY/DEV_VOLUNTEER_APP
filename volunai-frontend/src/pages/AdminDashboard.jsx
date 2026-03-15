@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import AdminVolunteers from './admin/AdminVolunteers';
+import AdminRequests from './admin/AdminRequests';
+import AdminMatching from './admin/AdminMatching';
 import {
     LayoutDashboard, PlusCircle, Users, ClipboardList, BarChart3,
     Brain, Target, Zap, CheckCircle2, XCircle, Clock, MapPin,
@@ -24,6 +28,7 @@ const TABS = [
     { id: 'create', label: 'Create Request', icon: PlusCircle },
     { id: 'chatbox', label: 'Chat Requests', icon: MessageSquare },
     { id: 'requests', label: 'All Requests', icon: ClipboardList },
+    { id: 'matching', label: 'AI Matching', icon: Brain },
     { id: 'volunteers', label: 'Volunteers', icon: Users },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
 ];
@@ -173,7 +178,7 @@ export default function AdminDashboard() {
                 <div className="main-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <div className="text-center">
                         <Activity size={48} style={{ marginBottom: 16, opacity: 0.5, color: 'var(--accent-purple)' }} />
-                        <p className="text-muted">Connecting to VolunAI backend...</p>
+                        <p className="text-muted">Connecting to CVAS backend...</p>
                     </div>
                 </div>
             </div>
@@ -190,7 +195,7 @@ export default function AdminDashboard() {
                     <>
                         <div className="page-header">
                             <h2>📊 Admin Overview</h2>
-                            <p>VolunAI Autonomous Coordination Dashboard</p>
+                            <p>CVAS — Autonomous Coordination Dashboard</p>
                         </div>
 
                         <div className="stats-grid">
@@ -532,124 +537,18 @@ export default function AdminDashboard() {
 
                 {/* ── All Requests Tab ── */}
                 {activeTab === 'requests' && (
-                    <>
-                        <div className="page-header">
-                            <h2>📋 All Service Requests</h2>
-                            <p>Track and manage all assistance requests</p>
-                        </div>
+                    <AdminRequests />
+                )}
 
-                        <div className="glass-card">
-                            <table className="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>ID</th><th>Requester</th><th>Service</th><th>Location</th>
-                                        <th>Urgency</th><th>Status</th><th>Assigned To</th><th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {requests.map(r => (
-                                        <tr key={r.id}>
-                                            <td>#{r.id}</td>
-                                            <td>
-                                                <strong>{r.requester_name}</strong><br />
-                                                <span className="text-sm text-muted">{r.requester_contact}</span>
-                                            </td>
-                                            <td>{r.service_type}</td>
-                                            <td>{r.location}</td>
-                                            <td><span className={`badge badge-${r.urgency_level?.toLowerCase()}`}>{r.urgency_level}</span></td>
-                                            <td><span className={`badge badge-${r.status?.toLowerCase()}`}>{r.status}</span></td>
-                                            <td>
-                                                {r.assigned_volunteer_name
-                                                    ? <span className="text-sm">{r.assigned_volunteer_name}</span>
-                                                    : <span className="text-muted text-sm">—</span>}
-                                            </td>
-                                            <td>
-                                                {r.status === 'ASSIGNED' && (
-                                                    <button onClick={() => handleStatusChange(r.id, 'COMPLETED')}
-                                                        className="btn btn-success btn-sm">
-                                                        <CheckCircle2 size={12} /> Complete
-                                                    </button>
-                                                )}
-                                                {r.status === 'PENDING' && (
-                                                    <button onClick={() => {
-                                                        const ranked = rankVolunteers(volunteers, r);
-                                                        setAiRanking(ranked);
-                                                        setCreatedRequest(r);
-                                                        setShowRanking(true);
-                                                        setActiveTab('create');
-                                                    }} className="btn btn-primary btn-sm">
-                                                        <Brain size={12} /> Match AI
-                                                    </button>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </>
+                {/* ── AI Matching Tab (Module 4) ── */}
+                {activeTab === 'matching' && (
+                    <AdminMatching />
                 )}
 
                 {/* ── Volunteers Tab ── */}
                 {activeTab === 'volunteers' && (
-                    <>
-                        <div className="page-header">
-                            <h2>👥 Volunteer Database</h2>
-                            <p>{volunteers.length} registered volunteers · {activeVolunteers} active</p>
-                        </div>
+                    <AdminVolunteers />
 
-                        <div className="glass-card">
-                            <table className="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Volunteer</th><th>Location</th><th>Services</th>
-                                        <th>Available Days</th><th>Rating</th><th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {volunteers.map(v => (
-                                        <tr key={v.id}>
-                                            <td>
-                                                <div className="flex items-center gap-12">
-                                                    <div className="profile-avatar" style={{ width: 32, height: 32, fontSize: 13 }}>
-                                                        {v.name?.charAt(0)}
-                                                    </div>
-                                                    <div>
-                                                        <div style={{ fontWeight: 600 }}>{v.name}</div>
-                                                        <div className="text-sm text-muted">{v.email}</div>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td><MapPin size={12} style={{ marginRight: 4 }} />{v.location}</td>
-                                            <td>
-                                                <div className="chip-group">
-                                                    {v.serviceType?.map((s, i) => <span key={i} className="chip">{s}</span>)}
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div className="chip-group">
-                                                    {v.availableDays?.map((d, i) => <span key={i} className="chip">{d.slice(0, 3)}</span>)}
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div className="score-bar-container">
-                                                    <div className="score-bar" style={{ width: 60 }}>
-                                                        <div className="score-bar-fill" style={{ width: `${(v.rating / 5) * 100}%` }} />
-                                                    </div>
-                                                    <span className="score-value">{v.rating}</span>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <span className={`badge ${v.active ? 'badge-completed' : 'badge-high'}`}>
-                                                    {v.active ? 'Active' : 'Inactive'}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </>
                 )}
 
                 {/* ── Analytics Tab ── */}
@@ -742,12 +641,14 @@ export default function AdminDashboard() {
 
 /* ── Sidebar Component ── */
 function Sidebar({ activeTab, setActiveTab }) {
+    const { user, logout } = useAuth();
+    const navigate = useNavigate();
     return (
         <div className="sidebar">
             <div className="sidebar-logo">
                 <div className="logo-icon">🤖</div>
                 <div>
-                    <h1>VolunAI</h1>
+                    <h1>CVAS</h1>
                     <span>Admin Panel</span>
                 </div>
             </div>
@@ -765,12 +666,22 @@ function Sidebar({ activeTab, setActiveTab }) {
             </div>
 
             <div style={{ marginTop: 'auto', padding: '16px 0', borderTop: '1px solid var(--border-glass)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {user && (
+                    <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-muted)', borderBottom: '1px solid var(--border-glass)', marginBottom: 4 }}>
+                        <div style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{user.name}</div>
+                        <div>{user.email}</div>
+                    </div>
+                )}
                 <a href="/chat" target="_blank" rel="noreferrer" className="sidebar-link" style={{ color: 'var(--accent-purple-light)' }}>
                     <MessageSquare size={18} className="link-icon" /> Open Chat Page
                 </a>
                 <Link to="/" className="sidebar-link">
                     <Home size={18} className="link-icon" /> Back to Home
                 </Link>
+                <button onClick={() => { logout(); navigate('/login'); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 8, fontSize: 14, fontWeight: 500, color: 'var(--accent-rose)', background: 'none', border: 'none', cursor: 'pointer', width: '100%' }}>
+                    🚪 Sign Out
+                </button>
             </div>
         </div>
     );
